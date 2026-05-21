@@ -2,7 +2,7 @@
 
 AI Tech Radar KR is a Korean-first prototype for tracking fast-moving AI technology signals as decision-ready issues instead of a raw news feed.
 
-The current version includes a static frontend, a FastAPI backend with a SQLite snapshot store, an official RSS/Atom collector, and a mock API. The UI can run on sample data first, then switch to a real backend through `GET /api/bootstrap`.
+The current version includes a static frontend, a FastAPI backend with a SQLite snapshot store, an official RSS/Atom collector, clustered issue scoring, and a mock API. The UI can run on sample data first, then switch to a real backend through `GET /api/bootstrap`.
 
 ## What It Includes
 
@@ -15,6 +15,7 @@ The current version includes a static frontend, a FastAPI backend with a SQLite 
 - API fallback behavior: sample data when no API is configured
 - FastAPI backend with a SQLite-backed snapshot read model
 - RSS/Atom collector for official AI blog feeds
+- Rule-based issue clustering and signal-based scoring
 - Mock API server for integration testing
 
 ## Run The Static App
@@ -131,6 +132,8 @@ Round 4 adds an official feed collector behind `POST /api/admin/collect`. The fi
 - Hugging Face Blog RSS: `https://huggingface.co/blog/feed.xml`
 - Google AI Blog RSS: `https://blog.google/technology/ai/rss/`
 
+Round 5 clusters similar feed entries into issue-level records before the snapshot is written, so the frontend continues to consume the same bootstrap shape but sees more decision-ready issues instead of raw one-entry-per-issue output.
+
 ## Project Files
 
 - `index.html`: app shell
@@ -166,6 +169,13 @@ curl -X POST http://127.0.0.1:8787/api/admin/rebuild-snapshot -H "X-Admin-Token:
 ```
 
 Round 4 also verified:
+
+```bash
+curl -X POST http://127.0.0.1:8787/api/admin/collect -H "X-Admin-Token: localai-dev-admin-token"
+curl http://127.0.0.1:8787/api/bootstrap
+```
+
+Round 5 also verified:
 
 ```bash
 curl -X POST http://127.0.0.1:8787/api/admin/collect -H "X-Admin-Token: localai-dev-admin-token"

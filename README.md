@@ -93,6 +93,20 @@ curl -X POST http://127.0.0.1:8787/api/admin/collect \
   -H "X-Admin-Token: localai-dev-admin-token"
 ```
 
+Read the latest admin status:
+
+```bash
+curl http://127.0.0.1:8787/api/admin/status \
+  -H "X-Admin-Token: localai-dev-admin-token"
+```
+
+List recent jobs:
+
+```bash
+curl "http://127.0.0.1:8787/api/admin/jobs?limit=10" \
+  -H "X-Admin-Token: localai-dev-admin-token"
+```
+
 Admin rebuild example:
 
 ```bash
@@ -133,6 +147,8 @@ Round 4 adds an official feed collector behind `POST /api/admin/collect`. The fi
 - Google AI Blog RSS: `https://blog.google/technology/ai/rss/`
 
 Round 5 clusters similar feed entries into issue-level records before the snapshot is written, so the frontend continues to consume the same bootstrap shape but sees more decision-ready issues instead of raw one-entry-per-issue output.
+
+Round 6 adds admin operations visibility through `GET /api/admin/status` and `GET /api/admin/jobs`, plus warning-aware job statuses such as `completed_with_warnings` when a collect run only partially succeeds.
 
 ## Project Files
 
@@ -180,6 +196,13 @@ Round 5 also verified:
 ```bash
 curl -X POST http://127.0.0.1:8787/api/admin/collect -H "X-Admin-Token: localai-dev-admin-token"
 curl http://127.0.0.1:8787/api/bootstrap
+```
+
+Round 6 also verified:
+
+```bash
+curl http://127.0.0.1:8787/api/admin/status -H "X-Admin-Token: localai-dev-admin-token"
+curl "http://127.0.0.1:8787/api/admin/jobs?limit=10" -H "X-Admin-Token: localai-dev-admin-token"
 ```
 
 Browser checks confirmed sample fallback, persisted FastAPI bootstrap replacement, and zero console errors in the successful frontend integration path.

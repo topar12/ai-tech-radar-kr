@@ -3,7 +3,13 @@ from typing import Annotated
 
 from fastapi import APIRouter, Header, HTTPException, status
 
-from app.data.bootstrap import build_bootstrap_payload, collect_bootstrap_snapshot, rebuild_bootstrap_snapshot
+from app.data.bootstrap import (
+    build_bootstrap_payload,
+    collect_bootstrap_snapshot,
+    read_admin_jobs,
+    read_admin_status,
+    rebuild_bootstrap_snapshot,
+)
 from app.settings import get_settings
 
 router = APIRouter()
@@ -50,7 +56,7 @@ def rebuild_snapshot(x_admin_token: Annotated[str | None, Header()] = None) -> d
     result = rebuild_bootstrap_snapshot(generated_at=utc_now_iso())
     return {
         "ok": True,
-        "status": "completed",
+        "status": result["status"],
         "jobId": result["jobId"],
         "snapshotId": result["snapshotId"],
         "generatedAt": result["generatedAt"],
@@ -65,11 +71,33 @@ def collect(x_admin_token: Annotated[str | None, Header()] = None) -> dict[str, 
     result = collect_bootstrap_snapshot(generated_at=utc_now_iso())
     return {
         "ok": True,
-        "status": "completed",
+        "status": result["status"],
         "jobId": result["jobId"],
         "snapshotId": result["snapshotId"],
         "generatedAt": result["generatedAt"],
         "counts": result["counts"],
         "collector": result["details"]["collector"],
         "message": "Official RSS/Atom feeds collected and snapshot rebuilt.",
+    }
+
+
+@router.get("/api/admin/status")
+def admin_status(x_admin_token: Annotated[str | None, Header()] = None) -> dict[str, object]:
+    require_admin_token(x_admin_token)
+    return {
+        "ok": True,
+        "generatedAt": utc_now_iso(),
+        **read_admin_status(),
+    }
+
+
+@router.get("/api/admin/jobs")
+def admin_jobs(limit: int = 20, x_admin_token: Annotated[str | None, Header()] = None) -> dict[str, object]:
+    require_admin_token(x_admin_token)
+    jobs = read_admin_jobs(limit=limit)
+    return {
+        "ok": True,
+        "generatedAt": utc_now_iso(),
+        "jobs": jobs,
+        "count": len(jobs),
     }

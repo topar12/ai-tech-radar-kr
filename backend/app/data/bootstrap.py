@@ -337,14 +337,21 @@ def insert_snapshot(connection, generated_at: str, payload: dict[str, object]) -
     return snapshot_id, counts
 
 
-def mark_job_completed(connection, job_id: str, finished_at: str, snapshot_id: str, details: dict[str, object]) -> None:
+def mark_job_completed(
+    connection,
+    job_id: str,
+    finished_at: str,
+    snapshot_id: str,
+    details: dict[str, object],
+    status: str = "completed",
+) -> None:
     connection.execute(
         """
         UPDATE jobs
         SET status = ?, finished_at = ?, snapshot_id = ?, details_json = ?
         WHERE id = ?
         """,
-        ("completed", finished_at, snapshot_id, dumps_json(details), job_id),
+        (status, finished_at, snapshot_id, dumps_json(details), job_id),
     )
 
 
@@ -385,6 +392,139 @@ def latest_snapshot_payload(connection) -> dict[str, object] | None:
     return loads_json(row["payload_json"])
 
 
+def latest_snapshot_metadata(connection) -> dict[str, object] | None:
+    row = connection.execute(
+        """
+        SELECT
+            id,
+            generated_at,
+            source_count,
+            signal_count,
+            issue_count,
+            watchlist_count,
+            created_at
+        FROM snapshots
+        ORDER BY generated_at DESC, created_at DESC, id DESC
+        LIMIT 1
+        """
+    ).fetchone()
+    if row is None:
+        return None
+    return {
+        "id": row["id"],
+        "generatedAt": row["generated_at"],
+        "counts": {
+            "sourceCount": row["source_count"],
+            "signalCount": row["signal_count"],
+            "issueCount": row["issue_count"],
+            "watchlistCount": row["watchlist_count"],
+        },
+        "createdAt": row["created_at"],
+    }
+
+
+def summarize_job_details(job_kind: str, details: dict[str, object]) -> dict[str, object]:
+    summary: dict[str, object] = {}
+    counts = details.get("counts")
+    if isinstance(counts, dict):
+        summary["counts"] = counts
+    collector = details.get("collector")
+    if job_kind == "collect_official_feeds" and isinstance(collector, dict):
+        feeds = collector.get("feeds", [])
+        if isinstance(feeds, list):
+            failed_feeds = [
+                feed.get("publisher", feed.get("id", "unknown"))
+                for feed in feeds
+                if isinstance(feed, dict) and feed.get("status") != "completed"
+            ]
+            empty_feeds = [
+                feed.get("publisher", feed.get("id", "unknown"))
+                for feed in feeds
+                if isinstance(feed, dict)
+                and feed.get("status") == "completed"
+                and int(feed.get("acceptedEntries", 0)) == 0
+            ]
+            summary["feedCount"] = len(feeds)
+            summary["failedFeedCount"] = len(failed_feeds)
+            summary["emptyFeedCount"] = len(empty_feeds)
+            if failed_feeds:
+                summary["failedFeeds"] = failed_feeds
+            if empty_feeds:
+                summary["emptyFeeds"] = empty_feeds
+        for key in ("rawEntryCount", "clusteredIssueCount", "multiSourceIssueCount"):
+            if key in collector:
+                summary[key] = collector[key]
+    if "seedLoaded" in details:
+        summary["seedLoaded"] = details["seedLoaded"]
+    if "error" in details:
+        summary["error"] = details["error"]
+    return summary
+
+
+def fetch_recent_jobs(connection, limit: int = 20) -> list[dict[str, object]]:
+    safe_limit = max(1, min(limit, 50))
+    rows = connection.execute(
+        """
+        SELECT id, kind, status, started_at, finished_at, snapshot_id, details_json
+        FROM jobs
+        ORDER BY started_at DESC, id DESC
+        LIMIT ?
+        """,
+        (safe_limit,),
+    ).fetchall()
+    jobs: list[dict[str, object]] = []
+    for row in rows:
+        details = loads_json(row["details_json"])
+        jobs.append(
+            {
+                "id": row["id"],
+                "kind": row["kind"],
+                "status": row["status"],
+                "startedAt": row["started_at"],
+                "finishedAt": row["finished_at"],
+                "snapshotId": row["snapshot_id"],
+                "summary": summarize_job_details(row["kind"], details),
+                "details": details,
+            }
+        )
+    return jobs
+
+
+def read_admin_status() -> dict[str, object]:
+    with db_session() as connection:
+        jobs = fetch_recent_jobs(connection, limit=10)
+        latest_collect = next((job for job in jobs if job["kind"] == "collect_official_feeds"), None)
+        latest_rebuild = next((job for job in jobs if job["kind"] == "rebuild_snapshot"), None)
+        return {
+            "tableCounts": count_table_rows(connection),
+            "latestSnapshot": latest_snapshot_metadata(connection),
+            "latestJob": jobs[0] if jobs else None,
+            "latestCollect": latest_collect,
+            "latestRebuild": latest_rebuild,
+            "recentJobs": jobs,
+        }
+
+
+def read_admin_jobs(limit: int = 20) -> list[dict[str, object]]:
+    with db_session() as connection:
+        return fetch_recent_jobs(connection, limit=limit)
+
+
+def collect_job_status(details: dict[str, object]) -> str:
+    collector = details.get("collector")
+    if not isinstance(collector, dict):
+        return "completed"
+    feeds = collector.get("feeds", [])
+    if not isinstance(feeds, list):
+        return "completed"
+    has_failed_feed = any(isinstance(feed, dict) and feed.get("status") != "completed" for feed in feeds)
+    has_empty_feed = any(
+        isinstance(feed, dict) and feed.get("status") == "completed" and int(feed.get("acceptedEntries", 0)) == 0
+        for feed in feeds
+    )
+    return "completed_with_warnings" if has_failed_feed or has_empty_feed else "completed"
+
+
 def ensure_bootstrap_data(connection) -> bool:
     if has_bootstrap_data(connection):
         return False
@@ -412,7 +552,7 @@ def create_snapshot_from_current_tables(
         }
         if job_details:
             details.update(job_details)
-        mark_job_completed(connection, job_id, generated_at, snapshot_id, details)
+        mark_job_completed(connection, job_id, generated_at, snapshot_id, details, status="completed")
         connection.commit()
         return {
             "jobId": job_id,
@@ -421,6 +561,7 @@ def create_snapshot_from_current_tables(
             "counts": counts,
             "payload": payload,
             "details": details,
+            "status": "completed",
         }
     except Exception as exc:
         connection.rollback()
@@ -457,7 +598,8 @@ def collect_bootstrap_snapshot(generated_at: str) -> dict[str, object]:
                 "counts": counts,
                 "collector": collector_details,
             }
-            mark_job_completed(connection, job_id, generated_at, snapshot_id, details)
+            job_status = collect_job_status(details)
+            mark_job_completed(connection, job_id, generated_at, snapshot_id, details, status=job_status)
             connection.commit()
             return {
                 "jobId": job_id,
@@ -466,6 +608,7 @@ def collect_bootstrap_snapshot(generated_at: str) -> dict[str, object]:
                 "counts": counts,
                 "payload": payload,
                 "details": details,
+                "status": job_status,
             }
         except Exception as exc:
             connection.rollback()

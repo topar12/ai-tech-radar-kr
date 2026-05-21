@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI Tech Radar KR · API 연결 가이드</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f4f2ec;
+      --surface: #fbfaf7;
+      --ink: #18211f;
+      --muted: #68736e;
+      --line: #d8d3c7;
+      --brand: #164f49;
+      --blue: #255e8d;
+      --green-soft: #e4f0e8;
+      --amber-soft: #f7ecd1;
+      --red-soft: #f5e5e2;
+      --radius: 8px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: 0;
+    }
+
+    a {
+      color: var(--brand);
+      font-weight: 760;
+    }
+
+    .shell {
+      display: grid;
+      grid-template-columns: 260px minmax(0, 1fr);
+      min-height: 100vh;
+    }
+
+    nav {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      padding: 24px;
+      border-right: 1px solid var(--line);
+      background: #eeece4;
+    }
+
+    nav strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 18px;
+    }
+
+    nav p {
+      margin: 0 0 22px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    nav a {
+      display: block;
+      margin: 8px 0;
+      padding: 10px 12px;
+      border: 1px solid transparent;
+      border-radius: var(--radius);
+      color: var(--ink);
+      text-decoration: none;
+    }
+
+    nav a:hover {
+      border-color: var(--line);
+      background: var(--surface);
+    }
+
+    main {
+      max-width: 1100px;
+      padding: 34px;
+    }
+
+    header {
+      margin-bottom: 26px;
+    }
+
+    .eyebrow {
+      margin: 0 0 8px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 760;
+    }
+
+    h1 {
+      max-width: 820px;
+      margin: 0;
+      font-size: 36px;
+      line-height: 1.18;
+      letter-spacing: 0;
+    }
+
+    .lead {
+      max-width: 760px;
+      margin: 14px 0 0;
+      color: #3d4945;
+      font-size: 17px;
+      line-height: 1.65;
+    }
+
+    section {
+      margin: 18px 0;
+      padding: 22px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+    }
+
+    h2 {
+      margin: 0 0 12px;
+      font-size: 22px;
+    }
+
+    h3 {
+      margin: 18px 0 8px;
+      font-size: 16px;
+    }
+
+    p,
+    li {
+      color: #3d4945;
+      font-size: 15px;
+      line-height: 1.7;
+    }
+
+    ul,
+    ol {
+      padding-left: 21px;
+    }
+
+    code,
+    pre {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    code {
+      padding: 2px 5px;
+      border-radius: 5px;
+      background: #eee9dc;
+      color: #1c3430;
+      font-size: 0.92em;
+    }
+
+    pre code {
+      padding: 0;
+      background: transparent;
+      color: inherit;
+      font-size: inherit;
+    }
+
+    pre {
+      overflow-x: auto;
+      margin: 12px 0 0;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #1f2926;
+      color: #f6f3ea;
+      font-size: 13px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .tile {
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #fffefb;
+    }
+
+    .tile b {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--brand);
+    }
+
+    .pill-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      padding: 4px 9px;
+      border-radius: 999px;
+      background: var(--green-soft);
+      color: var(--brand);
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .warning {
+      background: var(--amber-soft);
+    }
+
+    .risk {
+      background: var(--red-soft);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+      font-size: 14px;
+    }
+
+    th,
+    td {
+      padding: 11px;
+      border: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: #eee9dc;
+      color: var(--ink);
+    }
+
+    @media (max-width: 860px) {
+      .shell {
+        grid-template-columns: 1fr;
+      }
+
+      nav {
+        position: static;
+        height: auto;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+
+      nav a {
+        display: inline-block;
+      }
+
+      main {
+        padding: 18px;
+      }
+
+      h1 {
+        font-size: 28px;
+      }
+
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <nav aria-label="문서 목차">
+      <strong>API 연결 가이드</strong>
+      <p>정적 프로토타입을 실제 데이터 레이더로 바꾸기 위한 연결 계약입니다.</p>
+      <a href="#current">현재 구현</a>
+      <a href="#connect">연결 방법</a>
+      <a href="#contract">응답 계약</a>
+      <a href="#keys">필요한 키</a>
+      <a href="#backend">백엔드 순서</a>
+      <a href="#checklist">체크리스트</a>
+    </nav>
+
+    <main>
+      <header>
+        <p class="eyebrow">AI Tech Radar KR · 2026-05-21</p>
+        <h1>프론트는 준비됨. 이제 API는 이 계약만 맞추면 된다.</h1>
+        <p class="lead">
+          현재 앱은 기본적으로 샘플 데이터를 쓰지만, URL 파라미터나 localStorage로 API 주소를 넘기면
+          <code>GET /api/bootstrap</code> 응답을 받아 화면 데이터를 교체합니다. 즉, 수집기와 DB를 나중에 붙여도 UI를 다시 뜯지 않도록 연결 지점을 먼저 잡아둔 상태입니다.
+        </p>
+      </header>
+
+      <section id="current">
+        <h2>현재 구현 상태</h2>
+        <div class="grid">
+          <div class="tile">
+            <b>프론트 fallback</b>
+            <p>API 주소가 없거나 실패하면 기존 샘플 데이터로 렌더링합니다. 화면은 깨지지 않습니다.</p>
+          </div>
+          <div class="tile">
+            <b>API bootstrap</b>
+            <p><code>/api/bootstrap</code> 하나로 이슈, 신호, 출처, Watchlist, 라벨 사전을 한번에 받습니다.</p>
+          </div>
+          <div class="tile">
+            <b>Mock API</b>
+            <p><code>api/mock-radar-server.js</code>로 실제 연결 흐름을 바로 테스트할 수 있습니다.</p>
+          </div>
+        </div>
+        <div class="pill-row">
+          <span class="pill">정적 HTML 유지</span>
+          <span class="pill">CORS 대응</span>
+          <span class="pill">샘플 fallback</span>
+          <span class="pill warning">실수집기는 다음 단계</span>
+        </div>
+      </section>
+
+      <section id="connect">
+        <h2>연결 방법</h2>
+        <h3>1. Mock API 서버로 테스트</h3>
+        <pre><code>cd ai-tech-radar-kr
+node api/mock-radar-server.js</code></pre>
+
+        <h3>2. 프론트 정적 서버 실행</h3>
+        <pre><code>cd ai-tech-radar-kr
+python3 -m http.server 8765</code></pre>
+
+        <h3>3. API 주소를 붙여서 열기</h3>
+        <pre><code>http://127.0.0.1:8765/index.html?api=http://127.0.0.1:8787</code></pre>
+
+        <h3>대체 연결 방식</h3>
+        <p>자주 쓸 API 주소는 브라우저 콘솔에서 한번 저장해둘 수 있습니다.</p>
+        <pre><code>localStorage.setItem("radarApiBaseUrl", "http://127.0.0.1:8787");</code></pre>
+
+        <p>배포 HTML에서 고정하려면 <code>app.js</code>보다 먼저 아래 전역 값을 선언하면 됩니다.</p>
+        <pre><code>&lt;script&gt;
+  window.RADAR_API_BASE_URL = "https://api.your-radar.com";
+&lt;/script&gt;</code></pre>
+      </section>
+
+      <section id="contract">
+        <h2>필수 API 계약</h2>
+        <p>첫 단계에서는 엔드포인트를 많이 만들 필요 없습니다. 이 하나만 정확히 맞추면 현재 화면 전체가 살아납니다.</p>
+        <pre><code>GET /api/bootstrap
+Accept: application/json</code></pre>
+
+        <h3>응답 예시</h3>
+        <pre><code>{
+  "generatedAt": "2026-05-21T05:30:00Z",
+  "categories": {
+    "models": "Models",
+    "agents": "Agents",
+    "infra": "Infra",
+    "open_source": "Open Source",
+    "research": "Research",
+    "business": "Business",
+    "policy": "Policy"
+  },
+  "audienceLabels": {
+    "developer": "개발자",
+    "pm": "PM",
+    "leader": "리더",
+    "learner": "학습자",
+    "researcher": "리서처"
+  },
+  "certaintyLabels": {
+    "confirmed": "확정 발표",
+    "early_report": "초기 신호",
+    "inferred": "추정",
+    "debated": "논쟁 중"
+  },
+  "directionLabels": {
+    "rising": "급등",
+    "stable": "유지",
+    "cooling": "하락",
+    "watch": "관찰"
+  },
+  "sources": [],
+  "signals": [],
+  "issues": [],
+  "watchlists": []
+}</code></pre>
+
+        <h3>Issue 필드</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>필드</th>
+              <th>필수</th>
+              <th>설명</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td><code>id</code></td><td>예</td><td>이슈 고유 ID. 저장/숨김 상태가 이 값을 씁니다.</td></tr>
+            <tr><td><code>title</code></td><td>예</td><td>카드 제목. 사건명이 아니라 변화 단위로 작성합니다.</td></tr>
+            <tr><td><code>conclusion</code></td><td>예</td><td>상세 최상단에 보이는 결론 문장입니다.</td></tr>
+            <tr><td><code>categories</code></td><td>예</td><td><code>models</code>, <code>agents</code>, <code>infra</code> 같은 배열입니다.</td></tr>
+            <tr><td><code>tags</code></td><td>예</td><td>검색과 질문형 탐색에 쓰는 키워드입니다.</td></tr>
+            <tr><td><code>importance</code>, <code>velocity</code>, <code>practicalValue</code>, <code>koreaRelevance</code></td><td>예</td><td>0-100 점수. 정렬 탭에서 씁니다.</td></tr>
+            <tr><td><code>summary</code></td><td>예</td><td><code>whatHappened</code>, <code>whyMatters</code>, <code>whoAffected</code>, <code>nextAction</code>가 필요합니다.</td></tr>
+            <tr><td><code>sourceIds</code>, <code>signalIds</code></td><td>예</td><td>출처와 신호 배열을 연결하는 ID입니다.</td></tr>
+            <tr><td><code>timeline</code>, <code>validation</code></td><td>예</td><td>상세 탭의 흐름/행동 영역에 표시됩니다.</td></tr>
+          </tbody>
+        </table>
+
+        <h3>CORS 헤더</h3>
+        <p>프론트와 API 포트가 다르면 CORS가 필요합니다. 개발 중에는 아래 정도면 충분합니다.</p>
+        <pre><code>Access-Control-Allow-Origin: *
+Access-Control-Allow-Methods: GET, OPTIONS
+Access-Control-Allow-Headers: Content-Type, Accept</code></pre>
+      </section>
+
+      <section id="keys">
+        <h2>내가 연결해야 할 수 있는 API 키</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>용도</th>
+              <th>키</th>
+              <th>필수 여부</th>
+              <th>메모</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>GitHub 레포/토픽 활동</td>
+              <td><code>GITHUB_TOKEN</code></td>
+              <td>권장</td>
+              <td>무토큰도 가능하지만 rate limit이 낮습니다.</td>
+            </tr>
+            <tr>
+              <td>Hugging Face 모델 동향</td>
+              <td><code>HF_TOKEN</code></td>
+              <td>선택</td>
+              <td>공개 모델 조회는 일부 무토큰 가능. 안정성을 위해 토큰 권장.</td>
+            </tr>
+            <tr>
+              <td>LLM 요약/클러스터링</td>
+              <td><code>OPENAI_API_KEY</code> 등</td>
+              <td>선택</td>
+              <td>처음에는 규칙 기반 점수화로 시작하고, 요약 품질 개선 시 붙입니다.</td>
+            </tr>
+            <tr>
+              <td>뉴스/RSS</td>
+              <td>대부분 불필요</td>
+              <td>선택</td>
+              <td>공식 블로그 RSS, arXiv, HN 같은 공개 소스부터 시작합니다.</td>
+            </tr>
+          </tbody>
+        </table>
+        <p class="risk">주의: 유료 API 키는 클라이언트 HTML에 넣지 말고 반드시 서버 환경변수로만 보관해야 합니다.</p>
+      </section>
+
+      <section id="backend">
+        <h2>백엔드 구현 순서</h2>
+        <ol>
+          <li><b>수집</b>: 공식 블로그 RSS, GitHub, Hugging Face, arXiv, Hacker News부터 시작합니다.</li>
+          <li><b>정규화</b>: 원문을 <code>Source</code>로 저장하고, 출처 유형과 신뢰도를 붙입니다.</li>
+          <li><b>신호 생성</b>: 릴리즈, 스타 증가, 논문, 커뮤니티 급등 같은 이벤트를 <code>Signal</code>로 만듭니다.</li>
+          <li><b>클러스터링</b>: 여러 Source/Signal을 하나의 <code>Issue</code>로 묶습니다.</li>
+          <li><b>점수화</b>: 중요도, 확산, 실무성, 국내 관련성, 리스크를 계산합니다.</li>
+          <li><b>전달</b>: <code>/api/bootstrap</code>으로 현재 레이더 스냅샷을 내려줍니다.</li>
+        </ol>
+
+        <h3>처음 DB 추천</h3>
+        <p>초기에는 SQLite 하나로 충분합니다. 테이블은 <code>sources</code>, <code>signals</code>, <code>issues</code>, <code>watchlists</code>, <code>issue_sources</code>, <code>issue_signals</code> 정도면 됩니다.</p>
+      </section>
+
+      <section id="checklist">
+        <h2>연결 전 체크리스트</h2>
+        <ul>
+          <li><code>GET /health</code>가 200을 반환한다.</li>
+          <li><code>GET /api/bootstrap</code>가 JSON을 반환한다.</li>
+          <li><code>issues</code>, <code>sources</code>, <code>signals</code>, <code>watchlists</code>가 모두 배열이다.</li>
+          <li>모든 <code>issue.sourceIds</code>와 <code>issue.signalIds</code>가 실제 ID를 가리킨다.</li>
+          <li>CORS 헤더가 들어 있다.</li>
+          <li>프론트 URL에 <code>?api=...</code>를 붙였을 때 상단 상태가 <code>API 연결</code>로 바뀐다.</li>
+          <li>API가 죽었을 때 샘플 데이터로 fallback 되는지 확인한다.</li>
+        </ul>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

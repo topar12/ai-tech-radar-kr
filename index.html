@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI Tech Radar KR</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23164f49'/%3E%3Ctext x='32' y='39' text-anchor='middle' font-size='22' font-family='Arial' font-weight='700' fill='%23f8faf8'%3EAI%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="side-rail" aria-label="주요 탐색">
+      <a class="brand" href="#top" aria-label="AI Tech Radar KR 홈">
+        <span class="brand-mark">AI</span>
+        <span>
+          <strong>AI Tech Radar KR</strong>
+          <small>변화 감지 대시보드</small>
+        </span>
+      </a>
+
+      <nav class="nav-stack">
+        <a class="nav-link active" href="#top" data-section="today">
+          <span>오늘</span>
+          <small>핵심 변화</small>
+        </a>
+        <a class="nav-link" href="#radar" data-section="radar">
+          <span>레이더</span>
+          <small>분야별 흐름</small>
+        </a>
+        <a class="nav-link" href="#briefing" data-section="briefing">
+          <span>브리핑</span>
+          <small>10분 요약</small>
+        </a>
+        <a class="nav-link" href="#search" data-section="search">
+          <span>검색</span>
+          <small>질문형 탐색</small>
+        </a>
+      </nav>
+
+      <section class="rail-panel" aria-labelledby="watchlist-title">
+        <div class="panel-title-row">
+          <h2 id="watchlist-title">Watchlist</h2>
+          <button class="text-button" type="button" id="manageWatchlistButton">관리</button>
+        </div>
+        <div class="watchlist-list" id="watchlistList"></div>
+      </section>
+    </aside>
+
+    <main class="workspace" id="top">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow" id="dataStatus">샘플 데이터 · 오늘 14:20 기준</p>
+          <h1>오늘 AI 업계에서 실제로 바뀐 것</h1>
+        </div>
+        <div class="topbar-actions">
+          <label class="search-box" for="globalSearch">
+            <span aria-hidden="true">⌕</span>
+            <input id="globalSearch" type="search" placeholder="에이전트, 로컬 LLM, 규제 검색">
+          </label>
+          <button class="primary-button" type="button" id="briefingButton">10분 브리핑</button>
+        </div>
+      </header>
+
+      <section class="control-strip" aria-label="레이더 필터">
+        <div class="segmented" role="tablist" aria-label="사용자 관점">
+          <button class="segment active" type="button" data-role="all">전체</button>
+          <button class="segment" type="button" data-role="developer">개발자</button>
+          <button class="segment" type="button" data-role="pm">PM</button>
+          <button class="segment" type="button" data-role="leader">리더</button>
+          <button class="segment" type="button" data-role="learner">학습자</button>
+          <button class="segment" type="button" data-role="researcher">리서처</button>
+        </div>
+        <div class="segmented sort-tabs" role="tablist" aria-label="정렬">
+          <button class="segment active" type="button" data-sort="priority">중요</button>
+          <button class="segment" type="button" data-sort="velocity">확산</button>
+          <button class="segment" type="button" data-sort="practical">실무</button>
+          <button class="segment" type="button" data-sort="korea">국내</button>
+        </div>
+      </section>
+
+      <section class="main-grid">
+        <div class="primary-column">
+          <section class="today-section" aria-labelledby="today-title">
+            <div class="section-heading">
+              <div>
+                <h2 id="today-title">오늘 꼭 볼 변화</h2>
+                <p>카드를 펼치지 않아도 결론, 영향 대상, 신뢰 신호가 보이도록 구성했다.</p>
+              </div>
+              <button class="ghost-button" type="button" id="resetFiltersButton">필터 초기화</button>
+            </div>
+            <div class="issue-list" id="issueList"></div>
+          </section>
+
+          <section class="radar-section" id="radar" aria-labelledby="radar-title">
+            <div class="section-heading">
+              <div>
+                <h2 id="radar-title">분야별 레이더</h2>
+                <p>뉴스 수가 아니라 변화 방향과 유지 기간을 본다.</p>
+              </div>
+            </div>
+            <div class="radar-grid" id="radarGrid"></div>
+          </section>
+
+          <section class="briefing-section" id="briefing" aria-labelledby="briefing-title">
+            <div class="section-heading">
+              <div>
+                <h2 id="briefing-title">아침 10분 브리핑</h2>
+                <p>결론, 이유, 행동만 먼저 보고 근거는 필요할 때 펼친다.</p>
+              </div>
+            </div>
+            <div class="briefing-list" id="briefingList"></div>
+          </section>
+        </div>
+
+        <aside class="context-column" aria-label="상세 정보">
+          <section class="detail-panel" aria-labelledby="detail-title">
+            <div class="detail-top">
+              <span class="state-pill" id="detailState">선택된 이슈</span>
+              <button class="icon-button" id="saveSelectedButton" type="button" aria-label="선택 이슈 저장">☆</button>
+            </div>
+            <h2 id="detail-title">이슈를 선택하세요</h2>
+            <p class="detail-summary" id="detailSummary">오늘의 핵심 변화 중 하나를 누르면 판단 요약, 신뢰 신호, 타임라인을 바로 볼 수 있다.</p>
+
+            <div class="trust-strip" id="trustStrip"></div>
+
+            <div class="detail-tabs" role="tablist" aria-label="상세 탭">
+              <button class="detail-tab active" type="button" data-tab="overview">요약</button>
+              <button class="detail-tab" type="button" data-tab="evidence">근거</button>
+              <button class="detail-tab" type="button" data-tab="timeline">흐름</button>
+              <button class="detail-tab" type="button" data-tab="actions">행동</button>
+            </div>
+            <div class="detail-content" id="detailContent"></div>
+          </section>
+
+          <section class="search-panel" id="search" aria-labelledby="search-title">
+            <div class="panel-title-row">
+              <h2 id="search-title">질문형 탐색</h2>
+              <span class="mini-status">답 먼저</span>
+            </div>
+            <div class="question-list">
+              <button type="button" data-query="에이전트 프레임워크">요즘 에이전트 프레임워크 뭐 봐야 해?</button>
+              <button type="button" data-query="로컬 LLM">로컬 LLM은 실무에 쓸 만해졌나?</button>
+              <button type="button" data-query="규제">국내 AI 규제 변화는 뭘 봐야 해?</button>
+            </div>
+            <div class="search-results" id="searchResults"></div>
+          </section>
+        </aside>
+      </section>
+    </main>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="app.js"></script>
+</body>
+</html>

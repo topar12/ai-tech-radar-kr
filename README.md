@@ -80,6 +80,7 @@ See [ai-tech-radar-api-integration-guide.html](./ai-tech-radar-api-integration-g
 - `index.html`: app shell
 - `styles.css`: responsive product UI
 - `app.js`: rendering, state, API bootstrap, and interactions
+- `DESIGN.md`: Airbnb-inspired design system reference generated with `getdesign`
 - `api/mock-radar-server.js`: dependency-free mock API
 - `ai-tech-radar-kr-blueprint.html`: product blueprint
 - `ai-tech-radar-api-integration-guide.html`: API connection guide

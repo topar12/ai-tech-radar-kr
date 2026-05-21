@@ -619,6 +619,109 @@ function sourceSummary(issue) {
   return Object.entries(grouped).map(([label, count]) => `${label} ${count}`).join(" · ");
 }
 
+function linkedSources(issue) {
+  return issue.sourceIds.map((id) => byId(sources, id)).filter(Boolean);
+}
+
+function linkedSignals(issue) {
+  return issue.signalIds.map((id) => byId(signals, id)).filter(Boolean);
+}
+
+function officialSourceCount(issue) {
+  return linkedSources(issue).filter((source) => source.type === "official").length;
+}
+
+function roleDisplayLabel(role) {
+  return role === "all" ? "전체" : (audienceLabels[role] || role);
+}
+
+function roleIssues(role) {
+  return issues
+    .filter((issue) => !state.hidden.has(issue.id))
+    .filter(matchesQuery)
+    .filter((issue) => role === "all" || issue.audiences.includes(role))
+    .sort((a, b) => scoreFor(b) - scoreFor(a));
+}
+
+function readingLane(issue) {
+  if (issue.risk >= 70) {
+    return { label: "검증 먼저", tone: "warn" };
+  }
+  if (issue.sourceIds.length >= 2 && issue.importance >= 80) {
+    return { label: "바로 볼 것", tone: "brand" };
+  }
+  if (issue.practicalValue >= 78 || issue.importance >= 84) {
+    return { label: "바로 볼 것", tone: "brand" };
+  }
+  if (issue.sourceIds.length >= 2 || officialSourceCount(issue) > 0) {
+    return { label: "근거 확인", tone: "info" };
+  }
+  return { label: "흐름 파악", tone: "muted" };
+}
+
+function trustSignals(issue) {
+  const items = [];
+  const officialCount = officialSourceCount(issue);
+  if (officialCount) {
+    items.push({ label: "공식 확인", tone: "confirmed" });
+  }
+  if (issue.sourceIds.length >= 2) {
+    items.push({ label: "교차 출처", tone: "info" });
+  }
+  if (issue.practicalValue >= 75) {
+    items.push({ label: "실무 바로 연결", tone: "practical" });
+  }
+  if (issue.koreaRelevance >= 70) {
+    items.push({ label: "국내 영향 큼", tone: "korea" });
+  }
+  if (issue.risk >= 70) {
+    items.push({ label: "검증 먼저", tone: "risk" });
+  } else if (issue.risk <= 40) {
+    items.push({ label: "리스크 낮음", tone: "calm" });
+  }
+  if (issue.certainty === "inferred" || issue.certainty === "early_report") {
+    items.push({ label: "추가 확인 필요", tone: "soft" });
+  }
+  return items.slice(0, 4);
+}
+
+function trustChipsMarkup(issue, limit = 4) {
+  return trustSignals(issue)
+    .slice(0, limit)
+    .map((item) => `<span class="signal-chip ${item.tone}">${item.label}</span>`)
+    .join("");
+}
+
+function watchMatches(watch) {
+  const directMatches = (watch.issueIds || []).map((id) => byId(issues, id)).filter(Boolean);
+  if (directMatches.length) return directMatches;
+  const query = String(watch.query || "").trim().toLowerCase();
+  if (!query) return [];
+  return issues.filter((issue) => {
+    const haystack = [
+      issue.title,
+      issue.conclusion,
+      issue.summary.whatHappened,
+      issue.tags.join(" "),
+      issue.categories.join(" ")
+    ].join(" ").toLowerCase();
+    return haystack.includes(query);
+  });
+}
+
+function watchMetrics(watch) {
+  const related = watchMatches(watch);
+  const latest = related
+    .map((issue) => issue.updatedAt)
+    .filter(Boolean)
+    .sort()
+    .slice(-1)[0];
+  return {
+    issueCount: related.length,
+    latestUpdatedAt: latest || ""
+  };
+}
+
 function upsertCustomWatchlist(entry) {
   const existingIndex = state.customWatchlists.findIndex((item) => item.id === entry.id);
   if (existingIndex >= 0) {
@@ -637,17 +740,31 @@ function renderSnapshotStrip() {
   const summaryCard = $("#summaryCard");
   const connectionCard = $("#connectionCard");
   const connectedLabel = dataConnection.source === "api" ? "실데이터" : "샘플";
+  const laneCounts = visible.reduce((acc, issue) => {
+    const lane = readingLane(issue).label;
+    acc[lane] = (acc[lane] || 0) + 1;
+    return acc;
+  }, {});
+  const officialBacked = visible.filter((issue) => officialSourceCount(issue) > 0).length;
+  const multiSource = visible.filter((issue) => issue.sourceIds.length > 1).length;
+  const rolePreview = ["developer", "pm", "leader"].map((role) => {
+    const issue = roleIssues(role)[0];
+    return issue ? { role, issue } : null;
+  }).filter(Boolean);
 
   if (focusCard) {
     focusCard.innerHTML = selected ? `
       <span class="snapshot-kicker">지금 가장 먼저 볼 것</span>
       <h2>${escapeHtml(selected.title)}</h2>
       <p>${escapeHtml(selected.summary.whyMatters)}</p>
+      <div class="signal-chip-row">${trustChipsMarkup(selected, 3)}</div>
       <div class="metric-inline">
+        <span class="metric-pill lane-${readingLane(selected).tone}">${readingLane(selected).label}</span>
         <span class="metric-pill">${activeSortLabel()} ${scoreFor(selected)}</span>
         <span class="metric-pill">${directionLabels[selected.direction]}</span>
         <span class="metric-pill">${sourceSummary(selected) || "근거 준비 중"}</span>
       </div>
+      <div class="snapshot-note">${escapeHtml(selected.summary.nextAction)}</div>
     ` : `
       <span class="snapshot-kicker">지금 가장 먼저 볼 것</span>
       <h2>선택 가능한 이슈가 없습니다.</h2>
@@ -656,15 +773,35 @@ function renderSnapshotStrip() {
   }
 
   if (summaryCard) {
+    const roleSummary = state.role === "all"
+      ? `
+        <div class="snapshot-role-list">
+          ${rolePreview.map(({ role, issue }) => `
+            <button class="snapshot-role-item" type="button" data-role="${role}">
+              <strong>${roleDisplayLabel(role)}</strong>
+              <span>${escapeHtml(issue.title)}</span>
+            </button>
+          `).join("")}
+        </div>
+      `
+      : `
+        <div class="snapshot-role-focus">
+          <strong>${roleDisplayLabel(state.role)} 관점으로 먼저 볼 이슈</strong>
+          <span>${roleIssues(state.role).length}개가 현재 조건에 맞습니다.</span>
+          <b>${escapeHtml(roleIssues(state.role)[0]?.title || "현재 역할에 맞는 이슈가 없습니다.")}</b>
+        </div>
+      `;
+
     summaryCard.innerHTML = `
-      <span class="snapshot-kicker">현재 레이더 밀도</span>
-      <h3>${visible.length}개 이슈가 지금 화면에 보입니다.</h3>
+      <span class="snapshot-kicker">지금 훑는 방법</span>
+      <h3>${state.role === "all" ? "바로 볼 것과 검증 먼저를 먼저 가릅니다." : `${roleDisplayLabel(state.role)} 관점으로 우선순위를 좁혔습니다.`}</h3>
       <div class="snapshot-metrics">
-        <div class="metric-cell"><strong>${visible.length}</strong><span>현재 보이는 이슈</span></div>
+        <div class="metric-cell"><strong>${laneCounts["바로 볼 것"] || 0}</strong><span>바로 볼 것</span></div>
+        <div class="metric-cell"><strong>${laneCounts["검증 먼저"] || 0}</strong><span>검증 먼저</span></div>
         <div class="metric-cell"><strong>${state.saved.size}</strong><span>저장한 이슈</span></div>
-        <div class="metric-cell"><strong>${allWatchlists().length}</strong><span>Watchlist 항목</span></div>
-        <div class="metric-cell"><strong>${connectedLabel}</strong><span>데이터 모드</span></div>
+        <div class="metric-cell"><strong>${officialBacked}</strong><span>공식 확인 이슈</span></div>
       </div>
+      ${roleSummary}
     `;
   }
 
@@ -679,8 +816,13 @@ function renderSnapshotStrip() {
 
     connectionCard.innerHTML = `
       <span class="snapshot-kicker">데이터 상태</span>
-      <h3>연결 상태가 첫 화면에서 바로 보이게 유지합니다.</h3>
+      <h3>지금 데이터가 얼마나 믿을 만한지도 같이 보여줍니다.</h3>
       <div class="connection-list">${statusMarkup}</div>
+      <div class="metric-inline">
+        <span class="metric-pill">${visible.length}개 이슈</span>
+        <span class="metric-pill">${multiSource}개 교차 출처</span>
+        <span class="metric-pill">${connectedLabel}</span>
+      </div>
     `;
   }
 }
@@ -702,9 +844,12 @@ function renderIssueList() {
     const expanded = state.expanded.has(issue.id);
     const selected = state.selectedIssueId === issue.id;
     const saved = state.saved.has(issue.id);
+    const lane = readingLane(issue);
+    const roleHint = state.role === "all" ? shortAudience(issue) : `${roleDisplayLabel(state.role)} 관점 적합`;
     return `
       <article class="issue-card ${expanded ? "expanded" : ""} ${selected ? "selected" : ""}" data-issue-id="${issue.id}">
         <div class="issue-meta-row">
+          <span class="issue-meta-pill ${lane.tone}">${lane.label}</span>
           <span class="issue-meta-pill">${escapeHtml(formatIssueTime(issue.updatedAt))} 업데이트</span>
           <span class="issue-meta-pill">${issue.sourceIds.length}개 근거</span>
           <span class="issue-meta-pill">${issue.signalIds.length}개 신호</span>
@@ -722,13 +867,11 @@ function renderIssueList() {
         <div class="badge-row">
           <span class="badge ${issue.direction}">${directionLabels[issue.direction]}</span>
           <span class="badge ${issue.certainty}">${certaintyLabels[issue.certainty]}</span>
-          ${issue.koreaRelevance >= 70 ? `<span class="badge confirmed">국내 영향</span>` : ""}
-          ${issue.risk >= 65 ? `<span class="badge risk">검증 필요</span>` : ""}
-          ${issue.categories.slice(0, 3).map((category) => `<span class="badge">${categories[category]}</span>`).join("")}
+          ${trustChipsMarkup(issue, 3)}
         </div>
         <div class="source-row">
-          <span>${sourceSummary(issue)}</span>
-          <span>영향 대상: ${issue.audiences.slice(0, 3).map((a) => audienceLabels[a]).join(", ")}</span>
+          <span>${sourceSummary(issue) || "근거 준비 중"}</span>
+          <span>지금 보기 대상: ${escapeHtml(roleHint)}</span>
         </div>
         <div class="metric-strip">
           <div class="metric-card"><b>${issue.importance}</b><span>중요도</span></div>
@@ -764,18 +907,22 @@ function renderWatchlist() {
     return;
   }
 
-  list.innerHTML = items.map((watch) => `
-    <div class="watch-item">
-      <button class="watch-item-main" type="button" data-watchlist="${watch.id}">
-        <strong>${escapeHtml(watch.label)}</strong>
-        <span>${escapeHtml(watch.change)}</span>
-        <span class="watch-item-meta">
-          ${watch.custom ? '<span class="watch-tag">사용자 추가</span>' : ""}
-        </span>
-      </button>
-      ${watch.custom ? `<button class="watch-remove" type="button" data-remove-watch="${watch.id}" aria-label="${escapeHtml(watch.label)} 제거">×</button>` : ""}
-    </div>
-  `).join("");
+  list.innerHTML = items.map((watch) => {
+    const metrics = watchMetrics(watch);
+    return `
+      <div class="watch-item">
+        <button class="watch-item-main" type="button" data-watchlist="${watch.id}">
+          <strong>${escapeHtml(watch.label)}</strong>
+          <span>${escapeHtml(watch.change)}</span>
+          <span class="watch-secondary">${metrics.issueCount}개 이슈 · ${metrics.latestUpdatedAt ? `${escapeHtml(formatIssueTime(metrics.latestUpdatedAt))} 업데이트` : "업데이트 대기"}</span>
+          <span class="watch-item-meta">
+            ${watch.custom ? '<span class="watch-tag">사용자 추가</span>' : ""}
+          </span>
+        </button>
+        ${watch.custom ? `<button class="watch-remove" type="button" data-remove-watch="${watch.id}" aria-label="${escapeHtml(watch.label)} 제거">×</button>` : ""}
+      </div>
+    `;
+  }).join("");
 }
 
 function renderRadar() {
@@ -801,11 +948,27 @@ function renderBriefing() {
   const items = visibleIssues().slice(0, 4);
   $("#briefingList").innerHTML = items.map((issue, index) => `
     <details class="briefing-item" ${index === 0 ? "open" : ""}>
-      <summary>${index + 1}. ${escapeHtml(issue.title)}</summary>
+      <summary>
+        <div class="briefing-summary">
+          <span class="briefing-order">${index + 1}</span>
+          <div class="briefing-head">
+            <strong>${escapeHtml(issue.title)}</strong>
+            <div class="briefing-meta">
+              <span class="briefing-chip ${readingLane(issue).tone}">${readingLane(issue).label}</span>
+              ${trustChipsMarkup(issue, 2)}
+            </div>
+          </div>
+        </div>
+      </summary>
       <div class="briefing-body">
-        <div class="why-item"><b>결론</b><span>${escapeHtml(issue.conclusion)}</span></div>
+        <div class="why-item"><b>판단</b><span>${escapeHtml(issue.conclusion)}</span></div>
         <div class="why-item"><b>이유</b><span>${escapeHtml(issue.summary.whyMatters)}</span></div>
+        <div class="why-item"><b>대상</b><span>${escapeHtml(issue.summary.whoAffected)}</span></div>
         <div class="why-item"><b>행동</b><span>${escapeHtml(issue.summary.nextAction)}</span></div>
+        <div class="briefing-actions">
+          <button class="card-action" type="button" data-select="${issue.id}">상세 보기</button>
+          <button class="card-action" type="button" data-watch="${issue.id}">Watchlist</button>
+        </div>
       </div>
     </details>
   `).join("");
@@ -824,22 +987,52 @@ function renderDetail() {
   }
   state.selectedIssueId = issue.id;
 
-  $("#detailState").textContent = `${directionLabels[issue.direction]} · ${certaintyLabels[issue.certainty]}`;
+  $("#detailState").textContent = `${readingLane(issue).label} · ${directionLabels[issue.direction]}`;
   $("#detail-title").textContent = issue.title;
   $("#detailKicker").textContent = issue.conclusion;
   $("#detailSummary").textContent = `${sourceSummary(issue)} · 영향 대상 ${issue.audiences.map((item) => audienceLabels[item]).join(", ")}`;
   $("#saveSelectedButton").textContent = state.saved.has(issue.id) ? "★" : "☆";
 
-  const officialCount = issue.sourceIds
-    .map((id) => byId(sources, id))
-    .filter((source) => source && source.type === "official").length;
+  const officialCount = officialSourceCount(issue);
+  const trustBoard = [
+    {
+      value: officialCount ? `${officialCount}개` : "없음",
+      label: "공식 확인",
+      tone: officialCount ? "positive" : "neutral"
+    },
+    {
+      value: issue.sourceIds.length >= 2 ? `${issue.sourceIds.length}개` : "단일",
+      label: "교차 출처",
+      tone: issue.sourceIds.length >= 2 ? "positive" : "neutral"
+    },
+    {
+      value: issue.practicalValue >= 75 ? "바로 적용" : issue.practicalValue >= 60 ? "검토 가치" : "관찰",
+      label: "실무 연결",
+      tone: issue.practicalValue >= 75 ? "positive" : "neutral"
+    },
+    {
+      value: issue.koreaRelevance >= 70 ? "높음" : issue.koreaRelevance >= 50 ? "보통" : "낮음",
+      label: "국내 영향",
+      tone: issue.koreaRelevance >= 70 ? "info" : "neutral"
+    },
+    {
+      value: issue.risk >= 70 ? "검증 먼저" : issue.risk >= 45 ? "주의" : "낮음",
+      label: "검증 난도",
+      tone: issue.risk >= 70 ? "warn" : issue.risk >= 45 ? "info" : "positive"
+    },
+    {
+      value: shortAudience(issue) || "전체",
+      label: "먼저 볼 사람",
+      tone: "neutral"
+    }
+  ];
 
-  $("#trustStrip").innerHTML = `
-    <div class="trust-item"><b>${issue.sourceIds.length}개</b><span>묶인 출처</span></div>
-    <div class="trust-item"><b>${officialCount ? "있음" : "없음"}</b><span>공식 출처</span></div>
-    <div class="trust-item"><b>${issue.risk}</b><span>리스크 점수</span></div>
-    <div class="trust-item"><b>${issue.koreaRelevance}</b><span>국내 관련성</span></div>
-  `;
+  $("#trustStrip").innerHTML = trustBoard.map((item) => `
+    <div class="trust-item ${item.tone}">
+      <b>${escapeHtml(item.value)}</b>
+      <span>${item.label}</span>
+    </div>
+  `).join("");
 
   document.querySelectorAll(".detail-tab").forEach((tab) => {
     tab.classList.toggle("active", tab.dataset.tab === state.activeTab);
@@ -847,6 +1040,7 @@ function renderDetail() {
 
   const content = {
     overview: `
+      <div class="detail-callout">${trustChipsMarkup(issue, 4)}</div>
       <div class="detail-block"><b>무슨 일</b><p>${escapeHtml(issue.summary.whatHappened)}</p></div>
       <div class="detail-block"><b>왜 중요</b><p>${escapeHtml(issue.summary.whyMatters)}</p></div>
       <div class="detail-block"><b>누가 영향</b><p>${escapeHtml(issue.summary.whoAffected)}</p></div>
@@ -865,16 +1059,20 @@ function renderDetail() {
 }
 
 function renderEvidence(issue) {
-  const issueSignals = issue.signalIds.map((id) => byId(signals, id)).filter(Boolean);
-  const issueSources = issue.sourceIds.map((id) => byId(sources, id)).filter(Boolean);
+  const issueSignals = linkedSignals(issue);
+  const issueSources = linkedSources(issue);
+  const officialSources = issueSources.filter((source) => source.type === "official");
+  const supportingSources = issueSources.filter((source) => source.type !== "official");
   return `
+    <div class="detail-callout">${trustChipsMarkup(issue, 4)}</div>
     <div class="detail-block">
       <b>신호</b>
       <ul>${issueSignals.map((signal) => `<li>${escapeHtml(signal.title)} · 강도 ${signal.strength} · 확산 ${signal.velocity}</li>`).join("")}</ul>
     </div>
     <div class="detail-block">
       <b>출처</b>
-      <ul>${issueSources.map((source) => `<li><a href="${escapeHtml(source.url)}" target="_blank" rel="noreferrer">${escapeHtml(source.publisher)}</a> · ${escapeHtml(source.title)}</li>`).join("")}</ul>
+      ${officialSources.length ? `<div class="detail-source-group"><strong>공식 확인</strong><ul class="detail-source-list">${officialSources.map((source) => `<li><a href="${escapeHtml(source.url)}" target="_blank" rel="noreferrer">${escapeHtml(source.publisher)}</a> · ${escapeHtml(source.title)}</li>`).join("")}</ul></div>` : ""}
+      ${supportingSources.length ? `<div class="detail-source-group"><strong>보조 근거</strong><ul class="detail-source-list">${supportingSources.map((source) => `<li><a href="${escapeHtml(source.url)}" target="_blank" rel="noreferrer">${escapeHtml(source.publisher)}</a> · ${escapeHtml(source.title)}</li>`).join("")}</ul></div>` : ""}
     </div>
   `;
 }

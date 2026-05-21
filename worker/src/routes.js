@@ -1,5 +1,6 @@
 import { buildSampleBootstrap } from "./bootstrap-data.js";
 import { corsHeaders, preflightResponse } from "./cors.js";
+import { hasD1, readLatestSnapshot } from "./db.js";
 
 function utcNowIso() {
   return new Date().toISOString();
@@ -51,16 +52,30 @@ function health(request, env) {
     ok: true,
     service: "lokana-worker-api",
     runtime: "cloudflare-worker",
-    storage: "sample",
+    storage: hasD1(env) ? "d1" : "sample",
     generatedAt: utcNowIso(),
     corsConfigured: Boolean(env.CORS_ORIGINS),
-    d1Configured: Boolean(env.DB),
-    phase: "F1"
+    d1Configured: hasD1(env),
+    phase: "F2"
   });
 }
 
-function bootstrap(request, env) {
-  return jsonResponse(request, env, buildSampleBootstrap(utcNowIso()));
+async function bootstrap(request, env) {
+  const snapshot = await readLatestSnapshot(env);
+  if (snapshot) {
+    return jsonResponse(request, env, snapshot.payload, {
+      headers: {
+        "X-Lokana-Storage": "d1",
+        "X-Lokana-Snapshot": snapshot.id || ""
+      }
+    });
+  }
+
+  return jsonResponse(request, env, buildSampleBootstrap(utcNowIso()), {
+    headers: {
+      "X-Lokana-Storage": "sample"
+    }
+  });
 }
 
 export async function handleRequest(request, env = {}) {
@@ -76,7 +91,7 @@ export async function handleRequest(request, env = {}) {
   }
 
   if (routeKey === "GET /api/bootstrap") {
-    return bootstrap(request, env);
+    return await bootstrap(request, env);
   }
 
   if (url.pathname.startsWith("/api/admin/")) {

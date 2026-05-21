@@ -3,7 +3,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "check": "node --check src/bootstrap-data.js && node --check src/cors.js && node --check src/routes.js && node --check src/index.js && node scripts/smoke-local.mjs",
+    "check": "node --check src/bootstrap-data.js && node --check src/cors.js && node --check src/db.js && node --check src/routes.js && node --check src/index.js && node --check scripts/seed-local.mjs && node scripts/smoke-local.mjs",
+    "d1:migrate:local": "npx wrangler@latest d1 migrations apply lokana-prod --local --config wrangler.jsonc",
+    "d1:seed:local": "node scripts/seed-local.mjs",
     "dev": "npx wrangler@latest dev --config wrangler.jsonc --port 8788",
     "deploy": "npx wrangler@latest deploy --config wrangler.jsonc"
   }

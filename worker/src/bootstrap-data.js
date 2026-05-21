@@ -79,8 +79,8 @@ const sampleBootstrap = {
   issues: [
     {
       id: "worker-issue-free-api",
-      title: "Cloudflare 무료 구조용 Worker API 골격",
-      conclusion: "프론트는 같은 /api/bootstrap 계약으로 Worker 응답을 읽을 수 있다.",
+      title: "Cloudflare 무료 구조용 Worker API",
+      conclusion: "프론트는 같은 /api/bootstrap 계약으로 Worker 또는 D1 snapshot 응답을 읽을 수 있다.",
       categories: ["infra", "open_source", "business"],
       tags: ["cloudflare", "worker", "free-tier", "bootstrap"],
       certainty: "confirmed",
@@ -98,7 +98,7 @@ const sampleBootstrap = {
         whatHappened: "Render 백엔드와 별도로 Cloudflare Worker API 골격이 추가됐다.",
         whyMatters: "무료 운영 전환의 첫 관문인 프론트-API 계약을 먼저 고정할 수 있다.",
         whoAffected: "Lokana 운영자와 개발자",
-        nextAction: "D1 schema와 snapshot 저장소를 붙여 샘플 응답을 persisted snapshot으로 바꾼다."
+        nextAction: "D1 snapshot을 먼저 읽고, 없을 때만 sample 응답으로 돌아간다."
       },
       timeline: [
         "FastAPI /api/bootstrap 계약 확정",
@@ -119,7 +119,7 @@ const sampleBootstrap = {
       kind: "keyword",
       query: "cloudflare free-tier",
       issueIds: ["worker-issue-free-api"],
-      change: "F1 Worker API 골격 준비"
+      change: "Worker API 골격 준비"
     }
   ]
 };

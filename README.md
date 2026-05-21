@@ -17,7 +17,7 @@ The current version includes a static frontend, a FastAPI backend with a SQLite 
 - RSS/Atom collector for official AI blog feeds
 - Rule-based issue clustering and signal-based scoring
 - Mock API server for integration testing
-- Cloudflare Worker F1 skeleton for the fully free hosting migration path
+- Cloudflare Worker F2 skeleton with a D1 latest-snapshot read path for the fully free hosting migration path
 
 ## Run The Static App
 
@@ -197,17 +197,27 @@ Set `RUN_COLLECT=1` if you want the script to trigger a real collect run as part
 
 ### Cloudflare free migration path
 
-The repo also includes an F1 Cloudflare Worker skeleton for the zero-fixed-cost architecture:
+The repo also includes an F2 Cloudflare Worker skeleton for the zero-fixed-cost architecture:
 
 - `worker/`: Worker API surface
 - `worker/wrangler.jsonc`: Cloudflare Worker config
+- `worker/migrations/0001_initial.sql`: D1 schema for the current read model
+- `worker/scripts/seed-local.mjs`: local D1 seed helper
 - `worker/scripts/smoke-local.mjs`: dependency-free local contract check
 
-Run the F1 check:
+Run the Worker contract check:
 
 ```bash
 cd lokana/worker
 npm run check
+```
+
+Apply and seed local D1:
+
+```bash
+cd lokana/worker
+npm run d1:migrate:local
+npm run d1:seed:local
 ```
 
 Start Wrangler locally:
@@ -223,7 +233,7 @@ Connect the frontend:
 http://127.0.0.1:8765/index.html?api=http://127.0.0.1:8788
 ```
 
-F1 only serves `GET /health` and `GET /api/bootstrap` from sample data. D1 persistence, migrations, official feed collection, and admin operations land in later Cloudflare migration rounds.
+F2 serves `GET /health` and `GET /api/bootstrap`. Bootstrap reads the latest D1 snapshot first, then falls back to sample data when D1 is not configured or empty. Official feed collection and admin operations land in later Cloudflare migration rounds.
 
 ## API Contract
 
@@ -269,7 +279,7 @@ Round 7 adds deployment-ready artifacts for Render and a runtime-config hook for
 - `styles.css`: responsive product UI
 - `app.js`: rendering, state, API bootstrap, and interactions
 - `backend/`: FastAPI app, SQLite snapshot store, RSS/Atom collector, and admin flows
-- `worker/`: Cloudflare Worker skeleton for the fully free hosting migration path
+- `worker/`: Cloudflare Worker skeleton and D1 read path for the fully free hosting migration path
 - `DESIGN.md`: Airbnb-inspired design system reference generated with `getdesign`
 - `api/mock-radar-server.js`: dependency-free mock API
 

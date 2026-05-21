@@ -5,20 +5,29 @@
   "compatibility_date": "2026-05-21",
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
+  "routes": [
+    {
+      "pattern": "api.lokana.kr",
+      "custom_domain": true
+    }
+  ],
   "observability": {
     "enabled": true,
     "head_sampling_rate": 1
+  },
+  "triggers": {
+    "crons": ["0 */6 * * *"]
   },
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "lokana-prod",
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "26fb0540-64d7-4672-ac39-9d31cfc05db7",
       "migrations_dir": "migrations"
     }
   ],
   "vars": {
-    "CORS_ORIGINS": "http://127.0.0.1:8765,http://localhost:8765,https://lokana.kr",
+    "CORS_ORIGINS": "http://127.0.0.1:8765,http://localhost:8765,https://lokana.kr,https://www.lokana.kr",
     "COLLECTOR_MAX_ITEMS_PER_FEED": "4",
     "COLLECTOR_TIMEOUT_SECONDS": "15"
   }

@@ -10,13 +10,15 @@ F1 locked the Worker API shape. F2 added the local D1 schema and latest-snapshot
 - `GET /api/admin/status`
 - `GET /api/admin/jobs`
 - `POST /api/admin/rebuild-snapshot`
-- CORS for local frontend testing and `https://lokana.kr`
+- CORS for local frontend testing, `https://lokana.kr`, and `https://www.lokana.kr`
 - D1 migration for the current Lokana read model
 - local D1 seed helper that writes one bootstrap snapshot
 - D1-first `/api/bootstrap`, with sample fallback when D1 is not configured or empty
 - OpenAI, Hugging Face, and Google AI official RSS/Atom feed collection
 - D1 batch write for sources, signals, issues, watchlists, snapshots, and jobs
 - admin table counts, latest snapshot metadata, recent jobs, and collect/rebuild summaries
+- Cron Trigger: every 6 hours
+- production custom domain: `https://api.lokana.kr`
 
 ## Check Locally Without Cloudflare Login
 
@@ -116,17 +118,27 @@ npm run deploy
 Smoke-test the deployed Worker. First run it read-only:
 
 ```bash
-WORKER_URL=https://lokana-api.<account>.workers.dev npm run smoke:remote
+WORKER_URL=https://api.lokana.kr npm run smoke:remote
 ```
 
 Then run the full admin smoke after `ADMIN_TOKEN` is set:
 
 ```bash
-WORKER_URL=https://lokana-api.<account>.workers.dev \
+WORKER_URL=https://api.lokana.kr \
 ADMIN_TOKEN=your-production-admin-token \
 RUN_COLLECT=1 \
 RUN_REBUILD=1 \
 npm run smoke:remote
 ```
 
-Connect `api.lokana.kr` only after the workers.dev smoke passes.
+Use the workers.dev fallback when diagnosing DNS propagation:
+
+```text
+https://lokana-api.ttoparr12.workers.dev
+```
+
+The production Worker also runs scheduled collection every six hours:
+
+```text
+0 */6 * * *
+```

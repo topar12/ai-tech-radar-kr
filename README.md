@@ -17,7 +17,7 @@ The current version includes a static frontend, a FastAPI backend with a SQLite 
 - RSS/Atom collector for official AI blog feeds
 - Rule-based issue clustering and signal-based scoring
 - Mock API server for integration testing
-- Cloudflare Worker F5-ready path with D1 latest-snapshot reads, protected official RSS/Atom collect, admin status/jobs, manual snapshot rebuild, and remote smoke checks
+- Cloudflare Worker path with D1 latest-snapshot reads, protected official RSS/Atom collect, admin status/jobs, manual snapshot rebuild, six-hour Cron collection, and remote smoke checks
 
 ## Run The Static App
 
@@ -119,6 +119,13 @@ curl -X POST http://127.0.0.1:8787/api/admin/rebuild-snapshot \
 
 The current recommended zero-fixed-cost path is Cloudflare Workers plus D1 for the API, and static hosting for the frontend. The older FastAPI/Render setup is still present as a development reference, but the active deployment path is the Worker in `worker/`.
 
+Current production targets:
+
+- Frontend: `https://lokana.kr`
+- API: `https://api.lokana.kr`
+- Worker fallback: `https://lokana-api.ttoparr12.workers.dev`
+- Scheduled collection: every 6 hours with `0 */6 * * *`
+
 ### Cloudflare Worker API
 
 Local checks:
@@ -138,14 +145,15 @@ Cloudflare setup sequence:
 5. Set `ADMIN_TOKEN` with `npx wrangler@latest secret put ADMIN_TOKEN --config wrangler.jsonc`.
 6. Deploy with `npm run deploy`.
 7. Smoke-test workers.dev before connecting `api.lokana.kr`.
+8. Enable the six-hour Cron Trigger after manual remote smoke passes.
 
 Remote smoke:
 
 ```bash
 cd lokana/worker
-WORKER_URL=https://lokana-api.<account>.workers.dev npm run smoke:remote
+WORKER_URL=https://api.lokana.kr npm run smoke:remote
 
-WORKER_URL=https://lokana-api.<account>.workers.dev \
+WORKER_URL=https://api.lokana.kr \
 ADMIN_TOKEN=your-production-admin-token \
 RUN_COLLECT=1 \
 RUN_REBUILD=1 \
@@ -210,6 +218,7 @@ The repo also includes an F5-ready Cloudflare Worker path for the zero-fixed-cos
 - `worker/scripts/admin-smoke.mjs`: dependency-free admin status/jobs/rebuild check
 - `worker/scripts/collect-live.mjs`: live official feed fetch check without D1 writes
 - `worker/scripts/smoke-remote.mjs`: deployed Worker smoke check
+- Worker Cron Trigger: `0 */6 * * *`
 
 Run the Worker contract check:
 

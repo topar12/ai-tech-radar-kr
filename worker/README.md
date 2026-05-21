@@ -23,6 +23,7 @@ F1 locked the Worker API shape. F2 added the local D1 schema and latest-snapshot
 ```bash
 cd /Users/juho/Desktop/localAI/worker
 npm run check
+npm run deploy:dry-run
 ```
 
 ## Check Live Feed Parsing
@@ -94,10 +95,38 @@ For production, replace the placeholder `database_id` in `wrangler.jsonc` with t
 npx wrangler@latest d1 create lokana-prod
 ```
 
+Apply the migration to remote D1 after replacing the ID:
+
+```bash
+npm run d1:migrate:remote
+```
+
 Set the production admin secret before exposing collect:
 
 ```bash
 npx wrangler@latest secret put ADMIN_TOKEN --config wrangler.jsonc
 ```
 
-Wrangler login and deploy come later, after the local collect path is verified.
+Deploy the Worker:
+
+```bash
+npm run deploy
+```
+
+Smoke-test the deployed Worker. First run it read-only:
+
+```bash
+WORKER_URL=https://lokana-api.<account>.workers.dev npm run smoke:remote
+```
+
+Then run the full admin smoke after `ADMIN_TOKEN` is set:
+
+```bash
+WORKER_URL=https://lokana-api.<account>.workers.dev \
+ADMIN_TOKEN=your-production-admin-token \
+RUN_COLLECT=1 \
+RUN_REBUILD=1 \
+npm run smoke:remote
+```
+
+Connect `api.lokana.kr` only after the workers.dev smoke passes.

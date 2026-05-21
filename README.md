@@ -17,7 +17,7 @@ The current version includes a static frontend, a FastAPI backend with a SQLite 
 - RSS/Atom collector for official AI blog feeds
 - Rule-based issue clustering and signal-based scoring
 - Mock API server for integration testing
-- Cloudflare Worker F4 path with D1 latest-snapshot reads, protected official RSS/Atom collect, admin status/jobs, and manual snapshot rebuild
+- Cloudflare Worker F5-ready path with D1 latest-snapshot reads, protected official RSS/Atom collect, admin status/jobs, manual snapshot rebuild, and remote smoke checks
 
 ## Run The Static App
 
@@ -117,43 +117,44 @@ curl -X POST http://127.0.0.1:8787/api/admin/rebuild-snapshot \
 
 ## Deployment
 
-Round 7 adds repo-native deployment artifacts for a simple two-service setup:
+The current recommended zero-fixed-cost path is Cloudflare Workers plus D1 for the API, and static hosting for the frontend. The older FastAPI/Render setup is still present as a development reference, but the active deployment path is the Worker in `worker/`.
 
-- `render.yaml`: Render Blueprint for the backend web service and the static frontend
-- `runtime-config.js`: frontend runtime hook for the API base URL
-- `scripts/build-static.sh`: static build script that injects `LOKANA_API_BASE_URL`
-- `backend/.env.example`: local and production env reference
-- `backend/scripts/backup_sqlite.py`: SQLite backup helper
+### Cloudflare Worker API
 
-### Recommended deployment shape
+Local checks:
 
-1. Deploy the backend web service on Render with the persistent disk in `render.yaml`.
-2. Set these backend environment variables before the first production collect:
-   - `ADMIN_TOKEN`
-   - `CORS_ORIGINS`
-   - optional later: `GITHUB_TOKEN`, `HF_TOKEN`
-3. Deploy the static frontend service on Render from the same repo.
-4. Set `LOKANA_API_BASE_URL` on the static site to your backend public URL and redeploy the static site.
+```bash
+cd lokana/worker
+npm run check
+npm run deploy:dry-run
+```
 
-The backend uses SQLite today, so the persistent disk is intentional. That keeps data across deploys, but it also means the backend is not yet on a multi-instance database setup and should be treated as a single-instance deployment target.
+Cloudflare setup sequence:
 
-### Render backend values
+1. Log in with `npx wrangler@latest login`.
+2. Create D1 with `npx wrangler@latest d1 create lokana-prod`.
+3. Replace the placeholder `database_id` in `worker/wrangler.jsonc`.
+4. Apply remote migration with `npm run d1:migrate:remote`.
+5. Set `ADMIN_TOKEN` with `npx wrangler@latest secret put ADMIN_TOKEN --config wrangler.jsonc`.
+6. Deploy with `npm run deploy`.
+7. Smoke-test workers.dev before connecting `api.lokana.kr`.
 
-`render.yaml` already sets:
+Remote smoke:
 
-- `DATABASE_URL=sqlite:////var/data/lokana.sqlite3`
-- `COLLECTOR_TIMEOUT_SECONDS=15`
-- `COLLECTOR_MAX_ITEMS_PER_FEED=4`
-- `SSL_CERT_FILE=/etc/ssl/cert.pem`
+```bash
+cd lokana/worker
+WORKER_URL=https://lokana-api.<account>.workers.dev npm run smoke:remote
 
-You still need to set:
-
-- `ADMIN_TOKEN`
-- `CORS_ORIGINS`
+WORKER_URL=https://lokana-api.<account>.workers.dev \
+ADMIN_TOKEN=your-production-admin-token \
+RUN_COLLECT=1 \
+RUN_REBUILD=1 \
+npm run smoke:remote
+```
 
 ### Frontend runtime config
 
-The frontend now loads `runtime-config.js` before `app.js`.
+The frontend loads `runtime-config.js` before `app.js`.
 
 Local default:
 
@@ -162,16 +163,32 @@ window.LOKANA_API_BASE_URL = window.LOKANA_API_BASE_URL || "";
 window.RADAR_API_BASE_URL = window.RADAR_API_BASE_URL || window.LOKANA_API_BASE_URL || "";
 ```
 
-Render static builds overwrite that file in `dist/` using `LOKANA_API_BASE_URL`. If it is empty, the app falls back to sample data.
+For a static production build, inject the Worker API URL:
+
+```bash
+LOKANA_API_BASE_URL=https://api.lokana.kr bash scripts/build-static.sh
+```
+
+### Legacy Render Reference
+
+The repo still includes Render/FastAPI artifacts for development comparison:
+
+- `render.yaml`: Render Blueprint for the older backend web service and static frontend
+- `backend/.env.example`: local and production env reference
+- `backend/scripts/backup_sqlite.py`: SQLite backup helper
+
+Do not use Render for the free target unless the Cloudflare path is deliberately paused.
+
+Static builds overwrite `dist/runtime-config.js` using `LOKANA_API_BASE_URL`. If it is empty, the app falls back to sample data.
 
 ### GitHub Pages fallback
 
-If you do not want to host the frontend on Render, this repo can also be published as a static site from GitHub Pages. In that case the simplest path is:
+If you do not want to use Cloudflare Pages for the frontend, this repo can also be published as a static site from GitHub Pages. In that case the simplest path is:
 
 1. Publish the repository root from the `main` branch.
 2. Use `?api=https://api.lokana.kr` in the URL, or edit `runtime-config.js` for a fixed frontend deployment target.
 
-### Backup
+### Legacy FastAPI backup
 
 Create a timestamped backup of the SQLite file:
 
@@ -180,24 +197,9 @@ cd lokana
 PYTHONPATH=backend backend/.venv/bin/python backend/scripts/backup_sqlite.py
 ```
 
-### Production smoke test
-
-Run a quick end-to-end check after the frontend and backend are live:
-
-```bash
-cd lokana
-API_BASE_URL=https://api.lokana.kr \
-FRONTEND_URL=https://lokana.kr \
-ADMIN_TOKEN=your-admin-token \
-RUN_COLLECT=0 \
-bash scripts/smoke-production.sh
-```
-
-Set `RUN_COLLECT=1` if you want the script to trigger a real collect run as part of the check.
-
 ### Cloudflare free migration path
 
-The repo also includes an F4 Cloudflare Worker path for the zero-fixed-cost architecture:
+The repo also includes an F5-ready Cloudflare Worker path for the zero-fixed-cost architecture:
 
 - `worker/`: Worker API surface
 - `worker/wrangler.jsonc`: Cloudflare Worker config
@@ -207,12 +209,14 @@ The repo also includes an F4 Cloudflare Worker path for the zero-fixed-cost arch
 - `worker/scripts/collect-smoke.mjs`: dependency-free collector and D1 write check
 - `worker/scripts/admin-smoke.mjs`: dependency-free admin status/jobs/rebuild check
 - `worker/scripts/collect-live.mjs`: live official feed fetch check without D1 writes
+- `worker/scripts/smoke-remote.mjs`: deployed Worker smoke check
 
 Run the Worker contract check:
 
 ```bash
 cd lokana/worker
 npm run check
+npm run deploy:dry-run
 ```
 
 Apply and seed local D1:
@@ -259,27 +263,20 @@ curl -X POST http://127.0.0.1:8788/api/admin/rebuild-snapshot \
   -H "X-Admin-Token: local-dev-token"
 ```
 
-For production, set `ADMIN_TOKEN` as a Worker secret:
+Remote smoke after deployment:
 
 ```bash
 cd lokana/worker
-npx wrangler@latest secret put ADMIN_TOKEN --config wrangler.jsonc
+WORKER_URL=https://lokana-api.<account>.workers.dev npm run smoke:remote
+
+WORKER_URL=https://lokana-api.<account>.workers.dev \
+ADMIN_TOKEN=your-production-admin-token \
+RUN_COLLECT=1 \
+RUN_REBUILD=1 \
+npm run smoke:remote
 ```
 
-Start Wrangler locally:
-
-```bash
-cd lokana/worker
-npm run dev
-```
-
-Connect the frontend:
-
-```text
-http://127.0.0.1:8765/index.html?api=http://127.0.0.1:8788
-```
-
-F2 serves `GET /health` and `GET /api/bootstrap`. Bootstrap reads the latest D1 snapshot first, then falls back to sample data when D1 is not configured or empty. Official feed collection and admin operations land in later Cloudflare migration rounds.
+The Worker serves `GET /health`, `GET /api/bootstrap`, `POST /api/admin/collect`, `GET /api/admin/status`, `GET /api/admin/jobs`, and `POST /api/admin/rebuild-snapshot`. Bootstrap reads the latest D1 snapshot first, then falls back to sample data when D1 is not configured or empty.
 
 ## API Contract
 
@@ -325,7 +322,7 @@ Round 7 adds deployment-ready artifacts for Render and a runtime-config hook for
 - `styles.css`: responsive product UI
 - `app.js`: rendering, state, API bootstrap, and interactions
 - `backend/`: FastAPI app, SQLite snapshot store, RSS/Atom collector, and admin flows
-- `worker/`: Cloudflare Worker skeleton and D1 read path for the fully free hosting migration path
+- `worker/`: Cloudflare Worker and D1 path for the fully free hosting migration path
 - `DESIGN.md`: Airbnb-inspired design system reference generated with `getdesign`
 - `api/mock-radar-server.js`: dependency-free mock API
 
@@ -337,6 +334,7 @@ The current version was checked with:
 node --check app.js
 node --check api/mock-radar-server.js
 cd worker && npm run check
+cd worker && npm run deploy:dry-run
 ```
 
 Round 2 also verified:

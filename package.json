@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "build": "bash scripts/build-static.sh",
-    "check": "node --check app.js && node --check api/mock-radar-server.js && npm --prefix worker run check",
-    "check:frontend": "node --check app.js && node --check api/mock-radar-server.js",
+    "check": "node --check app.js && node --check admin.js && node --check api/mock-radar-server.js && npm --prefix worker run check",
+    "check:frontend": "node --check app.js && node --check admin.js && node --check api/mock-radar-server.js",
     "check:worker": "npm --prefix worker run check",
     "smoke:production": "API_BASE_URL=https://api.lokana.kr FRONTEND_URL=https://lokana.kr bash scripts/smoke-production.sh"
   }

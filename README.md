@@ -18,6 +18,7 @@ The active production stack is Cloudflare Pages for the static frontend, Cloudfl
 ## What It Includes
 
 - Static product UI with sample-data fallback
+- Static admin console at `/admin.html`
 - Role filters for developer, PM, leader, learner, and researcher perspectives
 - Issue cards with source grouping, certainty, risk, evidence, timeline, and action tabs
 - Watchlist and question-style exploration panels
@@ -61,6 +62,14 @@ To point the local frontend at production:
 ```text
 http://127.0.0.1:8765/index.html?api=https://api.lokana.kr
 ```
+
+Admin console:
+
+```text
+http://127.0.0.1:8765/admin.html?api=https://api.lokana.kr
+```
+
+Use the same `ADMIN_TOKEN` that is configured on the Cloudflare Worker. The admin console keeps the token in memory by default; if you enable "이 탭에서만 토큰 기억", it uses `sessionStorage` only for the current browser tab.
 
 ## Mock API
 
@@ -182,6 +191,9 @@ Admin endpoints require `X-Admin-Token`.
 - `index.html`: static app shell
 - `styles.css`: responsive product UI
 - `app.js`: rendering, state, API bootstrap, and interactions
+- `admin.html`: static admin console shell
+- `admin.css`: admin console layout and states
+- `admin.js`: admin API checks, protected actions, and result rendering
 - `runtime-config.js`: local default API config
 - `scripts/build-static.sh`: Pages build script
 - `scripts/smoke-production.sh`: production smoke helper

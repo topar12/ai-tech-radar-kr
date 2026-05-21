@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Lokana Admin</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23ff385c'/%3E%3Ctext x='32' y='39' text-anchor='middle' font-size='19' font-family='Arial' font-weight='700' fill='%23ffffff'%3ELK%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="admin.css?v=a1">
+</head>
+<body>
+  <div class="admin-shell">
+    <aside class="admin-rail" aria-label="관리 설정">
+      <a class="brand" href="index.html" aria-label="Lokana 홈으로 이동">
+        <span class="brand-mark">LK</span>
+        <span>
+          <strong>Lokana Admin</strong>
+          <small>Cloudflare 운영 콘솔</small>
+        </span>
+      </a>
+
+      <section class="rail-section" aria-labelledby="connection-title">
+        <div class="section-label">연결</div>
+        <h2 id="connection-title">API와 관리자 토큰</h2>
+        <label class="field">
+          <span>API 주소</span>
+          <input id="apiBaseInput" type="url" inputmode="url" autocomplete="off" spellcheck="false">
+        </label>
+        <label class="field">
+          <span>Admin token</span>
+          <input id="adminTokenInput" type="password" autocomplete="off" spellcheck="false" placeholder="GitHub/Cloudflare에 넣은 ADMIN_TOKEN">
+        </label>
+        <label class="check-row">
+          <input id="rememberSessionInput" type="checkbox">
+          <span>이 탭에서만 토큰 기억</span>
+        </label>
+        <div class="rail-actions">
+          <button class="button primary" id="checkConnectionButton" type="button">연결 확인</button>
+          <button class="button quiet" id="clearTokenButton" type="button">토큰 지우기</button>
+        </div>
+      </section>
+
+      <section class="rail-section compact" aria-labelledby="rules-title">
+        <div class="section-label">기준</div>
+        <h2 id="rules-title">운영 버튼 사용 순서</h2>
+        <ol class="rule-list">
+          <li>상태 확인으로 API, D1, 최신 스냅샷을 먼저 본다.</li>
+          <li>수집은 외부 RSS/Atom을 다시 읽고 새 스냅샷을 만든다.</li>
+          <li>스냅샷 재생성은 현재 D1 테이블만 다시 묶는다.</li>
+        </ol>
+      </section>
+
+      <a class="back-link" href="index.html">서비스 화면 보기</a>
+    </aside>
+
+    <main class="admin-main">
+      <header class="admin-topbar">
+        <div>
+          <p class="eyebrow">Production · lokana.kr</p>
+          <h1>운영 상태</h1>
+          <p class="topbar-copy">정상 여부, 최신 데이터, 최근 작업, 수동 작업 결과를 한 화면에서 확인한다.</p>
+        </div>
+        <div class="topbar-actions">
+          <span class="last-sync" id="lastSyncLabel">아직 확인 전</span>
+          <button class="button secondary" id="refreshButton" type="button">새로고침</button>
+        </div>
+      </header>
+
+      <section class="alert-stack" id="alertStack" aria-live="polite"></section>
+
+      <section class="status-grid" aria-label="핵심 상태">
+        <article class="stat-tile">
+          <span class="stat-label">API</span>
+          <strong id="apiStatusValue">미확인</strong>
+          <small id="apiStatusMeta">/health 응답 대기</small>
+        </article>
+        <article class="stat-tile">
+          <span class="stat-label">Storage</span>
+          <strong id="storageStatusValue">미확인</strong>
+          <small id="storageStatusMeta">D1 연결 상태</small>
+        </article>
+        <article class="stat-tile">
+          <span class="stat-label">Snapshot</span>
+          <strong id="snapshotStatusValue">미확인</strong>
+          <small id="snapshotStatusMeta">최신 생성 시각</small>
+        </article>
+        <article class="stat-tile">
+          <span class="stat-label">Latest job</span>
+          <strong id="jobStatusValue">미확인</strong>
+          <small id="jobStatusMeta">최근 관리자 작업</small>
+        </article>
+      </section>
+
+      <div class="workspace-grid">
+        <section class="section-block" aria-labelledby="snapshot-title">
+          <div class="block-heading">
+            <div>
+              <p class="section-label">Snapshot</p>
+              <h2 id="snapshot-title">현재 제공 중인 데이터</h2>
+            </div>
+            <span class="status-pill" id="snapshotPill">대기</span>
+          </div>
+          <div class="snapshot-panel" id="snapshotPanel"></div>
+        </section>
+
+        <section class="section-block" aria-labelledby="actions-title">
+          <div class="block-heading">
+            <div>
+              <p class="section-label">Actions</p>
+              <h2 id="actions-title">수동 운영</h2>
+            </div>
+            <span class="status-pill muted" id="tokenStatePill">토큰 필요</span>
+          </div>
+          <div class="action-stack">
+            <button class="action-row" id="collectButton" type="button">
+              <span>
+                <strong>외부 소스 수집</strong>
+                <small>공식 RSS/Atom을 다시 읽고 D1 스냅샷을 새로 만든다.</small>
+              </span>
+              <b>실행</b>
+            </button>
+            <button class="action-row" id="rebuildButton" type="button">
+              <span>
+                <strong>스냅샷 재생성</strong>
+                <small>현재 D1 테이블을 기준으로 공개 bootstrap을 다시 묶는다.</small>
+              </span>
+              <b>실행</b>
+            </button>
+          </div>
+        </section>
+
+        <section class="section-block wide" aria-labelledby="jobs-title">
+          <div class="block-heading">
+            <div>
+              <p class="section-label">Jobs</p>
+              <h2 id="jobs-title">최근 작업</h2>
+            </div>
+            <button class="button quiet" id="refreshJobsButton" type="button">작업만 새로고침</button>
+          </div>
+          <div class="jobs-list" id="jobsList"></div>
+        </section>
+
+        <section class="section-block wide" aria-labelledby="preview-title">
+          <div class="block-heading">
+            <div>
+              <p class="section-label">Preview</p>
+              <h2 id="preview-title">공개 데이터 미리보기</h2>
+            </div>
+            <span class="status-pill muted" id="previewCountPill">대기</span>
+          </div>
+          <div class="preview-grid" id="previewPanel"></div>
+        </section>
+      </div>
+
+      <section class="output-panel" aria-labelledby="output-title">
+        <div class="block-heading">
+          <div>
+            <p class="section-label">Result</p>
+            <h2 id="output-title">마지막 응답</h2>
+          </div>
+          <button class="button quiet" id="clearOutputButton" type="button">비우기</button>
+        </div>
+        <pre id="outputLog">아직 실행 결과가 없습니다.</pre>
+      </section>
+    </main>
+  </div>
+
+  <dialog class="confirm-dialog" id="confirmDialog">
+    <form method="dialog">
+      <p class="section-label">확인</p>
+      <h2 id="confirmTitle">실행할까요?</h2>
+      <p id="confirmBody">작업 내용을 확인한 뒤 실행하세요.</p>
+      <div class="dialog-actions">
+        <button class="button secondary" id="confirmCancelButton" value="cancel" type="button">취소</button>
+        <button class="button primary" id="confirmRunButton" value="confirm" type="button">실행</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="runtime-config.js?v=a1"></script>
+  <script src="admin.js?v=a1"></script>
+</body>
+</html>

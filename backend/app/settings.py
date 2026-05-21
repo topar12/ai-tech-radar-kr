@@ -28,6 +28,9 @@ class Settings:
     database_url: str
     github_token: str
     hf_token: str
+    collector_timeout_seconds: float
+    collector_max_items_per_feed: int
+    ssl_cert_file: str
 
 
 @lru_cache(maxsize=1)
@@ -40,4 +43,7 @@ def get_settings() -> Settings:
         database_url=os.getenv("DATABASE_URL", DEFAULT_DATABASE_URL),
         github_token=os.getenv("GITHUB_TOKEN", ""),
         hf_token=os.getenv("HF_TOKEN", ""),
+        collector_timeout_seconds=float(os.getenv("COLLECTOR_TIMEOUT_SECONDS", "15")),
+        collector_max_items_per_feed=int(os.getenv("COLLECTOR_MAX_ITEMS_PER_FEED", "4")),
+        ssl_cert_file=os.getenv("SSL_CERT_FILE", "/etc/ssl/cert.pem"),
     )

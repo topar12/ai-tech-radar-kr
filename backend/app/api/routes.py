@@ -3,7 +3,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Header, HTTPException, status
 
-from app.data.bootstrap import build_bootstrap_payload, rebuild_bootstrap_snapshot
+from app.data.bootstrap import build_bootstrap_payload, collect_bootstrap_snapshot, rebuild_bootstrap_snapshot
 from app.settings import get_settings
 
 router = APIRouter()
@@ -55,5 +55,21 @@ def rebuild_snapshot(x_admin_token: Annotated[str | None, Header()] = None) -> d
         "snapshotId": result["snapshotId"],
         "generatedAt": result["generatedAt"],
         "counts": result["counts"],
-        "message": "Snapshot rebuilt from SQLite seed data.",
+        "message": "Snapshot rebuilt from current SQLite data.",
+    }
+
+
+@router.post("/api/admin/collect")
+def collect(x_admin_token: Annotated[str | None, Header()] = None) -> dict[str, object]:
+    require_admin_token(x_admin_token)
+    result = collect_bootstrap_snapshot(generated_at=utc_now_iso())
+    return {
+        "ok": True,
+        "status": "completed",
+        "jobId": result["jobId"],
+        "snapshotId": result["snapshotId"],
+        "generatedAt": result["generatedAt"],
+        "counts": result["counts"],
+        "collector": result["details"]["collector"],
+        "message": "Official RSS/Atom feeds collected and snapshot rebuilt.",
     }

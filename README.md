@@ -2,7 +2,7 @@
 
 AI Tech Radar KR is a Korean-first prototype for tracking fast-moving AI technology signals as decision-ready issues instead of a raw news feed.
 
-The current version includes a static frontend, a FastAPI backend with a SQLite snapshot store, and a mock API. The UI can run on sample data first, then switch to a real backend through `GET /api/bootstrap`.
+The current version includes a static frontend, a FastAPI backend with a SQLite snapshot store, an official RSS/Atom collector, and a mock API. The UI can run on sample data first, then switch to a real backend through `GET /api/bootstrap`.
 
 ## What It Includes
 
@@ -14,6 +14,7 @@ The current version includes a static frontend, a FastAPI backend with a SQLite 
 - Watchlist and question-style exploration panels
 - API fallback behavior: sample data when no API is configured
 - FastAPI backend with a SQLite-backed snapshot read model
+- RSS/Atom collector for official AI blog feeds
 - Mock API server for integration testing
 
 ## Run The Static App
@@ -84,6 +85,13 @@ Health check:
 curl http://127.0.0.1:8787/health
 ```
 
+Collect official feeds and rebuild the snapshot:
+
+```bash
+curl -X POST http://127.0.0.1:8787/api/admin/collect \
+  -H "X-Admin-Token: localai-dev-admin-token"
+```
+
 Admin rebuild example:
 
 ```bash
@@ -117,12 +125,18 @@ The FastAPI backend serves the same contract and keeps the admin rebuild endpoin
 
 Round 3 stores the latest bootstrap payload as a persisted snapshot and reads that snapshot back on later requests.
 
+Round 4 adds an official feed collector behind `POST /api/admin/collect`. The first verified feed set is:
+
+- OpenAI News RSS: `https://openai.com/news/rss.xml`
+- Hugging Face Blog RSS: `https://huggingface.co/blog/feed.xml`
+- Google AI Blog RSS: `https://blog.google/technology/ai/rss/`
+
 ## Project Files
 
 - `index.html`: app shell
 - `styles.css`: responsive product UI
 - `app.js`: rendering, state, API bootstrap, and interactions
-- `backend/`: FastAPI app, SQLite snapshot store, and admin rebuild flow
+- `backend/`: FastAPI app, SQLite snapshot store, RSS/Atom collector, and admin flows
 - `DESIGN.md`: Airbnb-inspired design system reference generated with `getdesign`
 - `api/mock-radar-server.js`: dependency-free mock API
 
@@ -149,6 +163,13 @@ Round 3 also verified:
 backend/.venv/bin/python -m compileall backend/app
 curl http://127.0.0.1:8787/api/bootstrap
 curl -X POST http://127.0.0.1:8787/api/admin/rebuild-snapshot -H "X-Admin-Token: localai-dev-admin-token"
+```
+
+Round 4 also verified:
+
+```bash
+curl -X POST http://127.0.0.1:8787/api/admin/collect -H "X-Admin-Token: localai-dev-admin-token"
+curl http://127.0.0.1:8787/api/bootstrap
 ```
 
 Browser checks confirmed sample fallback, persisted FastAPI bootstrap replacement, and zero console errors in the successful frontend integration path.

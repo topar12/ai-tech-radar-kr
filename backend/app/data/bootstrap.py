@@ -2,6 +2,7 @@ import json
 from typing import Any
 from uuid import uuid4
 
+from app.collectors.rss import collect_official_feed_dataset
 from app.data.db import db_session
 from app.data.seed import LABELS, SEED_ISSUES, SEED_SIGNALS, SEED_SOURCES, SEED_WATCHLISTS
 
@@ -14,14 +15,27 @@ def loads_json(value: str) -> Any:
     return json.loads(value)
 
 
-def seed_reference_data(connection) -> None:
+def seed_dataset() -> dict[str, list[dict[str, object]]]:
+    return {
+        "sources": list(SEED_SOURCES),
+        "signals": list(SEED_SIGNALS),
+        "issues": list(SEED_ISSUES),
+        "watchlists": list(SEED_WATCHLISTS),
+    }
+
+
+def clear_bootstrap_tables(connection) -> None:
     connection.execute("DELETE FROM signals")
     connection.execute("DELETE FROM watchlists")
     connection.execute("DELETE FROM issues")
     connection.execute("DELETE FROM sources")
+
+
+def replace_dataset(connection, dataset: dict[str, list[dict[str, Any]]]) -> None:
+    clear_bootstrap_tables(connection)
     connection.executemany(
         """
-        INSERT OR REPLACE INTO sources (
+        INSERT INTO sources (
             id,
             type,
             publisher,
@@ -41,12 +55,12 @@ def seed_reference_data(connection) -> None:
                 source["reliability"],
                 source["publishedAt"],
             )
-            for source in SEED_SOURCES
+            for source in dataset["sources"]
         ],
     )
     connection.executemany(
         """
-        INSERT OR REPLACE INTO issues (
+        INSERT INTO issues (
             id,
             title,
             conclusion,
@@ -90,12 +104,12 @@ def seed_reference_data(connection) -> None:
                 dumps_json(issue["timeline"]),
                 dumps_json(issue["validation"]),
             )
-            for issue in SEED_ISSUES
+            for issue in dataset["issues"]
         ],
     )
     connection.executemany(
         """
-        INSERT OR REPLACE INTO signals (
+        INSERT INTO signals (
             id,
             issue_id,
             source_id,
@@ -117,12 +131,12 @@ def seed_reference_data(connection) -> None:
                 signal["velocity"],
                 signal["evidenceText"],
             )
-            for signal in SEED_SIGNALS
+            for signal in dataset["signals"]
         ],
     )
     connection.executemany(
         """
-        INSERT OR REPLACE INTO watchlists (
+        INSERT INTO watchlists (
             id,
             label,
             kind,
@@ -140,10 +154,13 @@ def seed_reference_data(connection) -> None:
                 dumps_json(watchlist["issueIds"]),
                 watchlist["change"],
             )
-            for watchlist in SEED_WATCHLISTS
+            for watchlist in dataset["watchlists"]
         ],
     )
-    connection.commit()
+
+
+def seed_reference_data(connection) -> None:
+    replace_dataset(connection, seed_dataset())
 
 
 def count_table_rows(connection) -> dict[str, int]:
@@ -153,6 +170,11 @@ def count_table_rows(connection) -> dict[str, int]:
         "issueCount": connection.execute("SELECT COUNT(*) FROM issues").fetchone()[0],
         "watchlistCount": connection.execute("SELECT COUNT(*) FROM watchlists").fetchone()[0],
     }
+
+
+def has_bootstrap_data(connection) -> bool:
+    counts = count_table_rows(connection)
+    return all(counts.values())
 
 
 def fetch_sources(connection) -> list[dict[str, object]]:
@@ -337,14 +359,14 @@ def mark_job_failed(connection, job_id: str, finished_at: str, details: dict[str
     )
 
 
-def create_job(connection, generated_at: str) -> str:
+def create_job(connection, kind: str, started_at: str, details: dict[str, object] | None = None) -> str:
     job_id = f"job-{uuid4()}"
     connection.execute(
         """
         INSERT INTO jobs (id, kind, status, started_at, finished_at, snapshot_id, details_json)
         VALUES (?, ?, ?, ?, ?, ?, ?)
         """,
-        (job_id, "rebuild_snapshot", "running", generated_at, None, None, dumps_json({})),
+        (job_id, kind, "running", started_at, None, None, dumps_json(details or {})),
     )
     return job_id
 
@@ -363,23 +385,79 @@ def latest_snapshot_payload(connection) -> dict[str, object] | None:
     return loads_json(row["payload_json"])
 
 
+def ensure_bootstrap_data(connection) -> bool:
+    if has_bootstrap_data(connection):
+        return False
+    seed_reference_data(connection)
+    return True
+
+
+def create_snapshot_from_current_tables(
+    connection,
+    generated_at: str,
+    job_kind: str,
+    job_details: dict[str, object] | None = None,
+) -> dict[str, object]:
+    job_id = create_job(connection, job_kind, generated_at, job_details)
+    connection.commit()
+    try:
+        connection.execute("BEGIN")
+        seeded = ensure_bootstrap_data(connection)
+        payload = build_snapshot_payload(connection, generated_at)
+        snapshot_id, counts = insert_snapshot(connection, generated_at, payload)
+        details = {
+            "generatedAt": generated_at,
+            "counts": counts,
+            "seedLoaded": seeded,
+        }
+        if job_details:
+            details.update(job_details)
+        mark_job_completed(connection, job_id, generated_at, snapshot_id, details)
+        connection.commit()
+        return {
+            "jobId": job_id,
+            "snapshotId": snapshot_id,
+            "generatedAt": generated_at,
+            "counts": counts,
+            "payload": payload,
+            "details": details,
+        }
+    except Exception as exc:
+        connection.rollback()
+        mark_job_failed(
+            connection,
+            job_id,
+            generated_at,
+            {
+                "generatedAt": generated_at,
+                "error": str(exc),
+            },
+        )
+        connection.commit()
+        raise
+
+
 def rebuild_bootstrap_snapshot(generated_at: str) -> dict[str, object]:
     with db_session() as connection:
-        job_id = create_job(connection, generated_at)
+        return create_snapshot_from_current_tables(connection, generated_at, "rebuild_snapshot")
+
+
+def collect_bootstrap_snapshot(generated_at: str) -> dict[str, object]:
+    with db_session() as connection:
+        job_id = create_job(connection, "collect_official_feeds", generated_at)
+        connection.commit()
         try:
-            seed_reference_data(connection)
+            dataset, collector_details = collect_official_feed_dataset(generated_at)
+            connection.execute("BEGIN")
+            replace_dataset(connection, dataset)
             payload = build_snapshot_payload(connection, generated_at)
             snapshot_id, counts = insert_snapshot(connection, generated_at, payload)
-            mark_job_completed(
-                connection,
-                job_id,
-                generated_at,
-                snapshot_id,
-                {
-                    "generatedAt": generated_at,
-                    "counts": counts,
-                },
-            )
+            details = {
+                "generatedAt": generated_at,
+                "counts": counts,
+                "collector": collector_details,
+            }
+            mark_job_completed(connection, job_id, generated_at, snapshot_id, details)
             connection.commit()
             return {
                 "jobId": job_id,
@@ -387,8 +465,10 @@ def rebuild_bootstrap_snapshot(generated_at: str) -> dict[str, object]:
                 "generatedAt": generated_at,
                 "counts": counts,
                 "payload": payload,
+                "details": details,
             }
         except Exception as exc:
+            connection.rollback()
             mark_job_failed(
                 connection,
                 job_id,
@@ -407,4 +487,5 @@ def build_bootstrap_payload(generated_at: str) -> dict[str, object]:
         payload = latest_snapshot_payload(connection)
         if payload is not None:
             return payload
-    return rebuild_bootstrap_snapshot(generated_at)["payload"]
+        result = create_snapshot_from_current_tables(connection, generated_at, "bootstrap_seed")
+        return result["payload"]

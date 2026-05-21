@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>AI Tech Radar KR</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23164f49'/%3E%3Ctext x='32' y='39' text-anchor='middle' font-size='22' font-family='Arial' font-weight='700' fill='%23f8faf8'%3EAI%3C/text%3E%3C/svg%3E">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=round1">
 </head>
 <body>
   <div class="app-shell">
@@ -14,7 +14,7 @@
         <span class="brand-mark">AI</span>
         <span>
           <strong>AI Tech Radar KR</strong>
-          <small>변화 감지 대시보드</small>
+          <small>오늘의 판단 레이더</small>
         </span>
       </a>
 
@@ -78,6 +78,12 @@
         </div>
       </section>
 
+      <section class="snapshot-strip" aria-label="현재 레이더 요약">
+        <article class="snapshot-card snapshot-card-primary" id="focusCard"></article>
+        <article class="snapshot-card" id="summaryCard"></article>
+        <article class="snapshot-card" id="connectionCard"></article>
+      </section>
+
       <section class="main-grid">
         <div class="primary-column">
           <section class="today-section" aria-labelledby="today-title">
@@ -119,6 +125,7 @@
               <button class="icon-button" id="saveSelectedButton" type="button" aria-label="선택 이슈 저장">☆</button>
             </div>
             <h2 id="detail-title">이슈를 선택하세요</h2>
+            <p class="detail-kicker" id="detailKicker">판단 요약</p>
             <p class="detail-summary" id="detailSummary">오늘의 핵심 변화 중 하나를 누르면 판단 요약, 신뢰 신호, 타임라인을 바로 볼 수 있다.</p>
 
             <div class="trust-strip" id="trustStrip"></div>
@@ -150,6 +157,6 @@
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="app.js"></script>
+  <script src="app.js?v=round1"></script>
 </body>
 </html>

@@ -389,7 +389,9 @@ const dataConnection = {
   source: "mock",
   generatedAt: "2026-05-21T05:20:00Z",
   baseUrl: "",
-  error: ""
+  error: "",
+  requested: false,
+  loading: false
 };
 
 const state = {
@@ -400,13 +402,26 @@ const state = {
   query: "",
   expanded: new Set(),
   saved: new Set(JSON.parse(localStorage.getItem("radarSavedIssues") || "[]")),
-  hidden: new Set(JSON.parse(localStorage.getItem("radarHiddenIssues") || "[]"))
+  hidden: new Set(JSON.parse(localStorage.getItem("radarHiddenIssues") || "[]")),
+  customWatchlists: JSON.parse(localStorage.getItem("radarCustomWatchlists") || "[]")
 };
 
 const $ = (selector) => document.querySelector(selector);
 
 function byId(list, id) {
   return list.find((item) => item.id === id);
+}
+
+function allWatchlists() {
+  return [...state.customWatchlists, ...watchlists];
+}
+
+function watchById(id) {
+  return allWatchlists().find((item) => item.id === id);
+}
+
+function normalizedWatchId(prefix, value) {
+  return `${prefix}-${String(value).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")}`;
 }
 
 function escapeHtml(value) {
@@ -418,9 +433,14 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
+function shortAudience(issue) {
+  return issue.audiences.slice(0, 2).map((item) => audienceLabels[item]).join(", ");
+}
+
 function persistState() {
   localStorage.setItem("radarSavedIssues", JSON.stringify([...state.saved]));
   localStorage.setItem("radarHiddenIssues", JSON.stringify([...state.hidden]));
+  localStorage.setItem("radarCustomWatchlists", JSON.stringify(state.customWatchlists));
 }
 
 function replaceDictionary(target, next) {
@@ -457,8 +477,10 @@ function validateApiPayload(payload) {
 async function loadRemoteRadarData() {
   const baseUrl = configuredApiBaseUrl();
   dataConnection.baseUrl = baseUrl;
+  dataConnection.requested = Boolean(baseUrl);
   if (!baseUrl) return;
 
+  dataConnection.loading = true;
   try {
     const response = await fetch(`${baseUrl}/api/bootstrap`, {
       headers: { Accept: "application/json" }
@@ -483,6 +505,8 @@ async function loadRemoteRadarData() {
   } catch (error) {
     dataConnection.source = "mock";
     dataConnection.error = error.message;
+  } finally {
+    dataConnection.loading = false;
   }
 }
 
@@ -498,12 +522,39 @@ function formatDataStatusTime(value) {
   }).format(date);
 }
 
+function formatIssueTime(value) {
+  if (!value) return "업데이트 시간 없음";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "업데이트 시간 없음";
+  return new Intl.DateTimeFormat("ko-KR", {
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(date);
+}
+
+function activeSortLabel() {
+  return {
+    priority: "중요도",
+    velocity: "확산 속도",
+    practical: "실무 가치",
+    korea: "국내 관련성"
+  }[state.sortBy] || "중요도";
+}
+
 function updateDataStatus() {
   const status = $("#dataStatus");
   if (!status) return;
   const time = formatDataStatusTime(dataConnection.generatedAt);
+  if (dataConnection.loading) {
+    status.textContent = "API 연결 확인 중";
+    return;
+  }
   if (dataConnection.source === "api") {
     status.textContent = `API 연결 · ${time || "방금"} 기준`;
+    return;
+  }
+  if (!dataConnection.requested) {
+    status.textContent = `샘플 데이터 · ${time || "오늘"} 기준`;
     return;
   }
   status.textContent = dataConnection.error
@@ -568,11 +619,82 @@ function sourceSummary(issue) {
   return Object.entries(grouped).map(([label, count]) => `${label} ${count}`).join(" · ");
 }
 
+function upsertCustomWatchlist(entry) {
+  const existingIndex = state.customWatchlists.findIndex((item) => item.id === entry.id);
+  if (existingIndex >= 0) {
+    state.customWatchlists[existingIndex] = { ...state.customWatchlists[existingIndex], ...entry };
+  } else {
+    state.customWatchlists.unshift(entry);
+  }
+  state.customWatchlists = state.customWatchlists.slice(0, 8);
+  persistState();
+}
+
+function renderSnapshotStrip() {
+  const visible = visibleIssues();
+  const selected = byId(issues, state.selectedIssueId) || visible[0] || issues[0];
+  const focusCard = $("#focusCard");
+  const summaryCard = $("#summaryCard");
+  const connectionCard = $("#connectionCard");
+  const connectedLabel = dataConnection.source === "api" ? "실데이터" : "샘플";
+
+  if (focusCard) {
+    focusCard.innerHTML = selected ? `
+      <span class="snapshot-kicker">지금 가장 먼저 볼 것</span>
+      <h2>${escapeHtml(selected.title)}</h2>
+      <p>${escapeHtml(selected.summary.whyMatters)}</p>
+      <div class="metric-inline">
+        <span class="metric-pill">${activeSortLabel()} ${scoreFor(selected)}</span>
+        <span class="metric-pill">${directionLabels[selected.direction]}</span>
+        <span class="metric-pill">${sourceSummary(selected) || "근거 준비 중"}</span>
+      </div>
+    ` : `
+      <span class="snapshot-kicker">지금 가장 먼저 볼 것</span>
+      <h2>선택 가능한 이슈가 없습니다.</h2>
+      <p>검색어를 줄이거나 필터를 초기화하면 오늘 레이더를 다시 넓게 볼 수 있습니다.</p>
+    `;
+  }
+
+  if (summaryCard) {
+    summaryCard.innerHTML = `
+      <span class="snapshot-kicker">현재 레이더 밀도</span>
+      <h3>${visible.length}개 이슈가 지금 화면에 보입니다.</h3>
+      <div class="snapshot-metrics">
+        <div class="metric-cell"><strong>${visible.length}</strong><span>현재 보이는 이슈</span></div>
+        <div class="metric-cell"><strong>${state.saved.size}</strong><span>저장한 이슈</span></div>
+        <div class="metric-cell"><strong>${allWatchlists().length}</strong><span>Watchlist 항목</span></div>
+        <div class="metric-cell"><strong>${connectedLabel}</strong><span>데이터 모드</span></div>
+      </div>
+    `;
+  }
+
+  if (connectionCard) {
+    const statusMarkup = dataConnection.loading
+      ? `<div class="connection-item"><strong>연결 확인 중</strong><span>설정된 API 주소로 bootstrap 응답을 기다리고 있습니다.</span></div>`
+      : dataConnection.source === "api"
+        ? `<div class="connection-item"><strong>API 연결됨</strong><span>${escapeHtml(dataConnection.baseUrl || "지정된 API")} · ${escapeHtml(formatDataStatusTime(dataConnection.generatedAt) || "방금")} 기준</span></div>`
+        : dataConnection.error
+          ? `<div class="connection-item error"><strong>샘플로 유지</strong><span>API 연결 실패: ${escapeHtml(dataConnection.error)}</span></div>`
+          : `<div class="connection-item"><strong>샘플 데이터 모드</strong><span>아직 API base URL이 없어서 내장 데이터로 레이더를 보여주고 있습니다.</span></div>`;
+
+    connectionCard.innerHTML = `
+      <span class="snapshot-kicker">데이터 상태</span>
+      <h3>연결 상태가 첫 화면에서 바로 보이게 유지합니다.</h3>
+      <div class="connection-list">${statusMarkup}</div>
+    `;
+  }
+}
+
 function renderIssueList() {
   const list = $("#issueList");
   const items = visibleIssues();
   if (!items.length) {
-    list.innerHTML = `<div class="issue-card"><strong>조건에 맞는 이슈가 없습니다.</strong><p class="detail-summary">검색어나 필터를 줄이면 더 넓은 레이더를 볼 수 있습니다.</p></div>`;
+    list.innerHTML = `
+      <div class="empty-card">
+        <strong>조건에 맞는 이슈가 없습니다.</strong>
+        <p>검색어를 줄이거나 역할 필터를 초기화하면 오늘 레이더를 다시 넓게 볼 수 있습니다.</p>
+      </div>
+    `;
     return;
   }
 
@@ -582,6 +704,11 @@ function renderIssueList() {
     const saved = state.saved.has(issue.id);
     return `
       <article class="issue-card ${expanded ? "expanded" : ""} ${selected ? "selected" : ""}" data-issue-id="${issue.id}">
+        <div class="issue-meta-row">
+          <span class="issue-meta-pill">${escapeHtml(formatIssueTime(issue.updatedAt))} 업데이트</span>
+          <span class="issue-meta-pill">${issue.sourceIds.length}개 근거</span>
+          <span class="issue-meta-pill">${issue.signalIds.length}개 신호</span>
+        </div>
         <div class="issue-header">
           <button class="issue-title-button" type="button" data-select="${issue.id}">
             <h3>${escapeHtml(issue.title)}</h3>
@@ -589,7 +716,7 @@ function renderIssueList() {
           </button>
           <div class="score-block">
             <strong>${scoreFor(issue)}</strong>
-            <span>${state.sortBy === "priority" ? "중요도" : "현재 점수"}</span>
+            <span>${escapeHtml(activeSortLabel())}</span>
           </div>
         </div>
         <div class="badge-row">
@@ -603,16 +730,26 @@ function renderIssueList() {
           <span>${sourceSummary(issue)}</span>
           <span>영향 대상: ${issue.audiences.slice(0, 3).map((a) => audienceLabels[a]).join(", ")}</span>
         </div>
+        <div class="metric-strip">
+          <div class="metric-card"><b>${issue.importance}</b><span>중요도</span></div>
+          <div class="metric-card"><b>${issue.velocity}</b><span>확산 속도</span></div>
+          <div class="metric-card"><b>${issue.practicalValue}</b><span>실무 가치</span></div>
+          <div class="metric-card"><b>${issue.koreaRelevance}</b><span>국내 관련성</span></div>
+        </div>
         <div class="why-panel">
           <div class="why-item"><b>무슨 일</b><span>${escapeHtml(issue.summary.whatHappened)}</span></div>
           <div class="why-item"><b>왜 중요</b><span>${escapeHtml(issue.summary.whyMatters)}</span></div>
           <div class="why-item"><b>지금 할 일</b><span>${escapeHtml(issue.summary.nextAction)}</span></div>
         </div>
         <div class="action-row">
-          <button class="why-button" type="button" data-expand="${issue.id}">${expanded ? "접기" : "왜 중요"}</button>
-          <button class="card-action" type="button" data-save="${issue.id}">${saved ? "저장됨" : "저장"}</button>
-          <button class="card-action" type="button" data-watch="${issue.id}">관심 등록</button>
-          <button class="card-action" type="button" data-hide="${issue.id}">숨기기</button>
+          <div class="action-group">
+            <button class="why-button" type="button" data-expand="${issue.id}">${expanded ? "접기" : "핵심 3줄"}</button>
+            <button class="card-action" type="button" data-save="${issue.id}">${saved ? "저장됨" : "저장"}</button>
+          </div>
+          <div class="action-group">
+            <button class="card-action-strong" type="button" data-watch="${issue.id}">Watchlist 추가</button>
+            <button class="card-action" type="button" data-hide="${issue.id}">숨기기</button>
+          </div>
         </div>
       </article>
     `;
@@ -620,11 +757,24 @@ function renderIssueList() {
 }
 
 function renderWatchlist() {
-  $("#watchlistList").innerHTML = watchlists.map((watch) => `
-    <button class="watch-item" type="button" data-watchlist="${watch.id}">
-      <strong>${escapeHtml(watch.label)}</strong>
-      <span>${escapeHtml(watch.change)}</span>
-    </button>
+  const list = $("#watchlistList");
+  const items = allWatchlists();
+  if (!items.length) {
+    list.innerHTML = `<div class="watch-empty">관심 이슈나 키워드를 추가하면 이곳에서 변화만 빠르게 다시 볼 수 있습니다.</div>`;
+    return;
+  }
+
+  list.innerHTML = items.map((watch) => `
+    <div class="watch-item">
+      <button class="watch-item-main" type="button" data-watchlist="${watch.id}">
+        <strong>${escapeHtml(watch.label)}</strong>
+        <span>${escapeHtml(watch.change)}</span>
+        <span class="watch-item-meta">
+          ${watch.custom ? '<span class="watch-tag">사용자 추가</span>' : ""}
+        </span>
+      </button>
+      ${watch.custom ? `<button class="watch-remove" type="button" data-remove-watch="${watch.id}" aria-label="${escapeHtml(watch.label)} 제거">×</button>` : ""}
+    </div>
   `).join("");
 }
 
@@ -666,6 +816,7 @@ function renderDetail() {
   if (!issue) {
     $("#detailState").textContent = "데이터 없음";
     $("#detail-title").textContent = "표시할 이슈가 없습니다";
+    $("#detailKicker").textContent = "판단 요약";
     $("#detailSummary").textContent = "API 응답에 issues 배열이 비어 있습니다.";
     $("#trustStrip").innerHTML = "";
     $("#detailContent").innerHTML = "";
@@ -674,8 +825,9 @@ function renderDetail() {
   state.selectedIssueId = issue.id;
 
   $("#detailState").textContent = `${directionLabels[issue.direction]} · ${certaintyLabels[issue.certainty]}`;
-  $("#detail-title").textContent = issue.conclusion;
-  $("#detailSummary").textContent = issue.title;
+  $("#detail-title").textContent = issue.title;
+  $("#detailKicker").textContent = issue.conclusion;
+  $("#detailSummary").textContent = `${sourceSummary(issue)} · 영향 대상 ${issue.audiences.map((item) => audienceLabels[item]).join(", ")}`;
   $("#saveSelectedButton").textContent = state.saved.has(issue.id) ? "★" : "☆";
 
   const officialCount = issue.sourceIds
@@ -738,7 +890,7 @@ function renderSearchResults() {
     </div>
     <div class="result-group">
       <strong>기술/용어</strong>
-      ${[...new Set(matches.flatMap((issue) => issue.tags))].slice(0, 5).map((tag) => `<button type="button" data-query="${tag}">#${escapeHtml(tag)} 알림 받기</button>`).join("") || "<span>관련 키워드 없음</span>"}
+      ${[...new Set(matches.flatMap((issue) => issue.tags))].slice(0, 5).map((tag) => `<button type="button" data-add-watch="${escapeHtml(tag)}">#${escapeHtml(tag)} Watchlist 추가</button>`).join("") || "<span>관련 키워드 없음</span>"}
     </div>
     <div class="result-group">
       <strong>원문</strong>
@@ -749,6 +901,7 @@ function renderSearchResults() {
 
 function renderAll() {
   updateDataStatus();
+  renderSnapshotStrip();
   renderIssueList();
   renderWatchlist();
   renderRadar();
@@ -787,11 +940,30 @@ document.addEventListener("click", (event) => {
     state.saved.has(id) ? state.saved.delete(id) : state.saved.add(id);
     persistState();
     renderAll();
-    showToast(state.saved.has(id) ? "저장했습니다. 주간 브리핑에 반영됩니다." : "저장을 해제했습니다.");
+    showToast(state.saved.has(id) ? "저장했습니다. 나중에 다시 보기 쉽게 묶어둡니다." : "저장을 해제했습니다.");
   }
 
   if (target.dataset.watch) {
-    showToast("관심 등록됨. 큰 변화가 있을 때만 알려줍니다.");
+    const issue = byId(issues, target.dataset.watch);
+    if (issue) {
+      const id = normalizedWatchId("issue", issue.id);
+      const existing = watchById(id);
+      if (existing) {
+        showToast("이미 Watchlist에 있는 이슈입니다.");
+      } else {
+        upsertCustomWatchlist({
+          id,
+          label: issue.title,
+          kind: "issue",
+          query: issue.tags[0] || issue.title,
+          issueIds: [issue.id],
+          change: `${directionLabels[issue.direction]} · ${shortAudience(issue)}`,
+          custom: true
+        });
+        renderAll();
+        showToast("Watchlist에 추가했습니다.");
+      }
+    }
   }
 
   if (target.dataset.hide) {
@@ -819,13 +991,20 @@ document.addEventListener("click", (event) => {
   }
 
   if (target.dataset.watchlist) {
-    const watch = byId(watchlists, target.dataset.watchlist);
+    const watch = watchById(target.dataset.watchlist);
     if (watch) {
       state.query = watch.query.split(" ")[0];
       $("#globalSearch").value = state.query;
       renderAll();
       showToast(`${watch.label} 관련 변화만 좁혀봤습니다.`);
     }
+  }
+
+  if (target.dataset.removeWatch) {
+    state.customWatchlists = state.customWatchlists.filter((item) => item.id !== target.dataset.removeWatch);
+    persistState();
+    renderAll();
+    showToast("Watchlist에서 제거했습니다.");
   }
 
   if (target.dataset.radarCategory) {
@@ -839,7 +1018,28 @@ document.addEventListener("click", (event) => {
     state.query = target.dataset.query;
     $("#globalSearch").value = state.query;
     renderAll();
-    showToast("검색어 알림 후보에 추가했습니다.");
+    showToast("질문을 현재 레이더에 바로 반영했습니다.");
+  }
+
+  if (target.dataset.addWatch) {
+    const tag = target.dataset.addWatch;
+    const id = normalizedWatchId("tag", tag);
+    const existing = watchById(id);
+    if (existing) {
+      showToast("이미 Watchlist에 있는 키워드입니다.");
+    } else {
+      upsertCustomWatchlist({
+        id,
+        label: `#${tag}`,
+        kind: "keyword",
+        query: tag,
+        issueIds: [],
+        change: "검색에서 바로 추가됨",
+        custom: true
+      });
+      renderAll();
+      showToast("키워드를 Watchlist에 추가했습니다.");
+    }
   }
 
   if (target.dataset.sourceUrl) {
@@ -869,7 +1069,7 @@ document.addEventListener("click", (event) => {
   }
 
   if (target.id === "manageWatchlistButton") {
-    showToast("Watchlist 관리는 다음 단계에서 설정 화면으로 확장합니다.");
+    showToast(state.customWatchlists.length ? "사용자 추가 항목은 오른쪽 ×로 바로 정리할 수 있습니다." : "이슈 카드나 검색 결과에서 Watchlist를 추가해보세요.");
   }
 });
 
@@ -879,6 +1079,7 @@ $("#globalSearch").addEventListener("input", (event) => {
 });
 
 async function initRadarApp() {
+  renderAll();
   await loadRemoteRadarData();
   if (!byId(issues, state.selectedIssueId)) {
     state.selectedIssueId = issues[0]?.id || "";

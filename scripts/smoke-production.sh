@@ -44,7 +44,7 @@ FRONTEND_URL="${FRONTEND_URL:-}"
 ADMIN_TOKEN="${ADMIN_TOKEN:-}"
 RUN_COLLECT="${RUN_COLLECT:-0}"
 
-echo "== AI Tech Radar production smoke test =="
+echo "== Lokana production smoke test =="
 echo "API_BASE_URL=$API_BASE_URL"
 if [ -n "$FRONTEND_URL" ]; then
   echo "FRONTEND_URL=$FRONTEND_URL"

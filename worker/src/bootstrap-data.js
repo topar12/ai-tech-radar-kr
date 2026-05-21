@@ -52,7 +52,7 @@ const sampleBootstrap = {
       id: "worker-src-d1",
       type: "official",
       publisher: "Cloudflare D1",
-      title: "D1-backed snapshot read model planned",
+      title: "D1-backed snapshot read model",
       url: "https://developers.cloudflare.com/d1/",
       reliability: 5,
       publishedAt: "2026-05-21T01:10:00Z"
@@ -64,7 +64,7 @@ const sampleBootstrap = {
       issueId: "worker-issue-free-api",
       sourceId: "worker-src-official",
       type: "migration",
-      title: "FastAPI 호환 bootstrap endpoint가 Worker에서 먼저 열림",
+      title: "Cloudflare Worker bootstrap endpoint가 운영 API로 열림",
       strength: 82,
       velocity: 68,
       evidenceText: "Cloudflare Worker가 /api/bootstrap 응답 계약을 유지한다."
@@ -74,10 +74,10 @@ const sampleBootstrap = {
       issueId: "worker-issue-free-api",
       sourceId: "worker-src-d1",
       type: "storage_plan",
-      title: "다음 단계에서 D1 snapshot 1행 읽기 구조로 전환 예정",
+      title: "D1 snapshot 1행 읽기 구조로 운영",
       strength: 76,
       velocity: 62,
-      evidenceText: "F2에서 SQLite seed/schema를 D1 migration으로 옮긴다."
+      evidenceText: "최신 bootstrap payload는 D1 snapshots 테이블에서 먼저 읽는다."
     }
   ],
   issues: [
@@ -99,18 +99,18 @@ const sampleBootstrap = {
       signalIds: ["worker-sig-api", "worker-sig-d1"],
       updatedAt: "2026-05-21T02:30:00Z",
       summary: {
-        whatHappened: "Render 백엔드와 별도로 Cloudflare Worker API 골격이 추가됐다.",
-        whyMatters: "무료 운영 전환의 첫 관문인 프론트-API 계약을 먼저 고정할 수 있다.",
+        whatHappened: "Cloudflare Worker API와 D1 snapshot 경로가 Lokana 운영 API로 배포됐다.",
+        whyMatters: "사용자 요청 때 외부 feed를 다시 긁지 않고, 미리 만들어 둔 snapshot을 빠르게 읽을 수 있다.",
         whoAffected: "Lokana 운영자와 개발자",
         nextAction: "D1 snapshot을 먼저 읽고, 없을 때만 sample 응답으로 돌아간다."
       },
       timeline: [
-        "FastAPI /api/bootstrap 계약 확정",
-        "Cloudflare Worker F1 골격 추가",
-        "D1 migration과 collector 포팅 예정"
+        "Cloudflare Worker /api/bootstrap 계약 확정",
+        "D1 migration과 collector 포팅 완료",
+        "api.lokana.kr custom domain 연결"
       ],
       validation: [
-        "Worker fetch handler 로컬 smoke 확인",
+        "Worker fetch handler remote smoke 확인",
         "프론트 필수 배열과 label dictionary 포함",
         "CORS preflight 응답 확인"
       ]

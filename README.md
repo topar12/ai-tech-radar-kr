@@ -114,6 +114,70 @@ curl -X POST http://127.0.0.1:8787/api/admin/rebuild-snapshot \
   -H "X-Admin-Token: localai-dev-admin-token"
 ```
 
+## Deployment
+
+Round 7 adds repo-native deployment artifacts for a simple two-service setup:
+
+- `render.yaml`: Render Blueprint for the backend web service and the static frontend
+- `runtime-config.js`: frontend runtime hook for the API base URL
+- `scripts/build-static.sh`: static build script that injects `RADAR_API_BASE_URL`
+- `backend/.env.example`: local and production env reference
+- `backend/scripts/backup_sqlite.py`: SQLite backup helper
+
+### Recommended deployment shape
+
+1. Deploy the backend web service on Render with the persistent disk in `render.yaml`.
+2. Set these backend environment variables before the first production collect:
+   - `ADMIN_TOKEN`
+   - `CORS_ORIGINS`
+   - optional later: `GITHUB_TOKEN`, `HF_TOKEN`
+3. Deploy the static frontend service on Render from the same repo.
+4. Set `RADAR_API_BASE_URL` on the static site to your backend public URL and redeploy the static site.
+
+The backend uses SQLite today, so the persistent disk is intentional. That keeps data across deploys, but it also means the backend is not yet on a multi-instance database setup and should be treated as a single-instance deployment target.
+
+### Render backend values
+
+`render.yaml` already sets:
+
+- `DATABASE_URL=sqlite:////var/data/localai-radar.sqlite3`
+- `COLLECTOR_TIMEOUT_SECONDS=15`
+- `COLLECTOR_MAX_ITEMS_PER_FEED=4`
+- `SSL_CERT_FILE=/etc/ssl/cert.pem`
+
+You still need to set:
+
+- `ADMIN_TOKEN`
+- `CORS_ORIGINS`
+
+### Frontend runtime config
+
+The frontend now loads `runtime-config.js` before `app.js`.
+
+Local default:
+
+```js
+window.RADAR_API_BASE_URL = window.RADAR_API_BASE_URL || "";
+```
+
+Render static builds overwrite that file in `dist/` using `RADAR_API_BASE_URL`. If it is empty, the app falls back to sample data.
+
+### GitHub Pages fallback
+
+If you do not want to host the frontend on Render, this repo can also be published as a static site from GitHub Pages. In that case the simplest path is:
+
+1. Publish the repository root from the `main` branch.
+2. Use `?api=https://your-backend-domain` in the URL, or edit `runtime-config.js` for a fixed frontend deployment target.
+
+### Backup
+
+Create a timestamped backup of the SQLite file:
+
+```bash
+cd ai-tech-radar-kr
+PYTHONPATH=backend backend/.venv/bin/python backend/scripts/backup_sqlite.py
+```
+
 ## API Contract
 
 The app expects one bootstrap endpoint:
@@ -149,6 +213,8 @@ Round 4 adds an official feed collector behind `POST /api/admin/collect`. The fi
 Round 5 clusters similar feed entries into issue-level records before the snapshot is written, so the frontend continues to consume the same bootstrap shape but sees more decision-ready issues instead of raw one-entry-per-issue output.
 
 Round 6 adds admin operations visibility through `GET /api/admin/status` and `GET /api/admin/jobs`, plus warning-aware job statuses such as `completed_with_warnings` when a collect run only partially succeeds.
+
+Round 7 adds deployment-ready artifacts for Render and a runtime-config hook for static hosting.
 
 ## Project Files
 
@@ -203,6 +269,13 @@ Round 6 also verified:
 ```bash
 curl http://127.0.0.1:8787/api/admin/status -H "X-Admin-Token: localai-dev-admin-token"
 curl "http://127.0.0.1:8787/api/admin/jobs?limit=10" -H "X-Admin-Token: localai-dev-admin-token"
+```
+
+Round 7 also verified:
+
+```bash
+bash scripts/build-static.sh
+PYTHONPATH=backend backend/.venv/bin/python backend/scripts/backup_sqlite.py
 ```
 
 Browser checks confirmed sample fallback, persisted FastAPI bootstrap replacement, and zero console errors in the successful frontend integration path.

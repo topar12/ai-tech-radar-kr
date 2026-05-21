@@ -456,7 +456,9 @@ function configuredApiBaseUrl() {
   const params = new URLSearchParams(window.location.search);
   return (
     params.get("api") ||
+    localStorage.getItem("lokanaApiBaseUrl") ||
     localStorage.getItem("radarApiBaseUrl") ||
+    window.LOKANA_API_BASE_URL ||
     window.RADAR_API_BASE_URL ||
     ""
   ).trim().replace(/\/$/, "");

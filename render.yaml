@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: ai-tech-radar-api
+    name: lokana-api
     runtime: python
     rootDir: backend
     plan: starter
@@ -13,9 +13,9 @@ services:
       sizeGB: 1
     envVars:
       - key: APP_NAME
-        value: AI Tech Radar Backend
+        value: Lokana API
       - key: DATABASE_URL
-        value: sqlite:////var/data/localai-radar.sqlite3
+        value: sqlite:////var/data/lokana.sqlite3
       - key: COLLECTOR_TIMEOUT_SECONDS
         value: "15"
       - key: COLLECTOR_MAX_ITEMS_PER_FEED
@@ -23,7 +23,7 @@ services:
       - key: SSL_CERT_FILE
         value: /etc/ssl/cert.pem
   - type: web
-    name: ai-tech-radar-web
+    name: lokana-web
     runtime: static
     buildCommand: bash scripts/build-static.sh
     staticPublishPath: ./dist

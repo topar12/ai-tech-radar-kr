@@ -38,7 +38,7 @@ def health() -> dict[str, object]:
     settings = get_settings()
     return {
         "ok": True,
-        "service": "localai-radar-backend",
+        "service": "lokana-api",
         "generatedAt": utc_now_iso(),
         "adminConfigured": bool(settings.admin_token),
         "databaseConfigured": bool(settings.database_url),

@@ -9,7 +9,7 @@ DEFAULT_CORS_ORIGINS = (
     "http://localhost:8765",
 )
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_DATABASE_URL = f"sqlite:///{BACKEND_ROOT / 'data' / 'localai-radar.sqlite3'}"
+DEFAULT_DATABASE_URL = f"sqlite:///{BACKEND_ROOT / 'data' / 'lokana.sqlite3'}"
 
 
 def parse_csv(value: str | None, fallback: tuple[str, ...]) -> list[str]:
@@ -36,7 +36,7 @@ class Settings:
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     return Settings(
-        app_name=os.getenv("APP_NAME", os.getenv("LOCALAI_APP_NAME", "LocalAI Radar Backend")),
+        app_name=os.getenv("APP_NAME", os.getenv("LOCALAI_APP_NAME", "Lokana API")),
         debug=os.getenv("DEBUG", os.getenv("LOCALAI_DEBUG", "")).lower() in {"1", "true", "yes", "on"},
         cors_origins=parse_csv(os.getenv("CORS_ORIGINS", os.getenv("LOCALAI_CORS_ORIGINS")), DEFAULT_CORS_ORIGINS),
         admin_token=os.getenv("ADMIN_TOKEN", ""),

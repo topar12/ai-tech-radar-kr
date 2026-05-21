@@ -1,7 +1,15 @@
 import { buildSampleBootstrap } from "./bootstrap-data.js";
 import { collectJobStatus, collectOfficialFeedDataset } from "./collector.js";
 import { corsHeaders, preflightResponse } from "./cors.js";
-import { hasD1, persistCollectedSnapshot, readLatestSnapshot } from "./db.js";
+import {
+  hasD1,
+  persistCollectedSnapshot,
+  persistFailedJob,
+  readAdminJobs,
+  readAdminStatus,
+  readLatestSnapshot,
+  rebuildSnapshotFromCurrentTables
+} from "./db.js";
 
 function utcNowIso() {
   return new Date().toISOString();
@@ -42,7 +50,7 @@ function adminNotReady(request, env, feature = "admin route") {
     {
       ok: false,
       error: "not_implemented",
-      message: `${feature} is planned for F4. F3 only adds protected collect.`
+      message: `${feature} is not implemented.`
     },
     { status: 501 }
   );
@@ -101,7 +109,7 @@ function health(request, env) {
     generatedAt: utcNowIso(),
     corsConfigured: Boolean(env.CORS_ORIGINS),
     d1Configured: hasD1(env),
-    phase: "F3"
+    phase: "F4"
   });
 }
 
@@ -142,8 +150,9 @@ async function collect(request, env) {
     );
   }
 
+  const generatedAt = utcNowIso();
   try {
-    const collection = await collectOfficialFeedDataset({ env, fetchFn: fetch });
+    const collection = await collectOfficialFeedDataset({ env, fetchFn: fetch, generatedAt });
     const status = collectJobStatus(collection.details);
     const result = await persistCollectedSnapshot(env, collection, status);
     return jsonResponse(request, env, {
@@ -163,16 +172,127 @@ async function collect(request, env) {
         message: error instanceof Error ? error.message : String(error)
       })
     );
+    const failedJob = await persistFailedJob(env, "collect_official_feeds", generatedAt, error).catch((jobError) => {
+      console.warn(
+        JSON.stringify({
+          event: "lokana.collect_failed_job_write_failed",
+          message: jobError instanceof Error ? jobError.message : String(jobError)
+        })
+      );
+      return null;
+    });
     return jsonResponse(
       request,
       env,
       {
         ok: false,
         error: "collect_failed",
+        jobId: failedJob?.jobId || null,
         message: error instanceof Error ? error.message : String(error)
       },
       { status: 502 }
     );
+  }
+}
+
+function d1NotConfigured(request, env) {
+  return jsonResponse(
+    request,
+    env,
+    {
+      ok: false,
+      error: "d1_not_configured",
+      message: "D1 binding is required for this admin route."
+    },
+    { status: 503 }
+  );
+}
+
+async function adminGuard(request, env) {
+  const auth = await requireAdmin(request, env);
+  if (!auth.ok) {
+    return {
+      ok: false,
+      response: jsonResponse(request, env, auth.payload, { status: auth.status })
+    };
+  }
+
+  if (!hasD1(env)) {
+    return {
+      ok: false,
+      response: d1NotConfigured(request, env)
+    };
+  }
+
+  return { ok: true };
+}
+
+function adminReadFailed(request, env, feature, error) {
+  console.warn(
+    JSON.stringify({
+      event: `lokana.${feature}_failed`,
+      message: error instanceof Error ? error.message : String(error)
+    })
+  );
+  return jsonResponse(
+    request,
+    env,
+    {
+      ok: false,
+      error: `${feature}_failed`,
+      message: error instanceof Error ? error.message : String(error)
+    },
+    { status: 502 }
+  );
+}
+
+async function adminStatus(request, env) {
+  const guard = await adminGuard(request, env);
+  if (!guard.ok) return guard.response;
+
+  try {
+    return jsonResponse(request, env, {
+      ok: true,
+      ...(await readAdminStatus(env))
+    });
+  } catch (error) {
+    return adminReadFailed(request, env, "admin_status", error);
+  }
+}
+
+async function adminJobs(request, env, url) {
+  const guard = await adminGuard(request, env);
+  if (!guard.ok) return guard.response;
+
+  try {
+    const jobs = await readAdminJobs(env, url.searchParams.get("limit"));
+    return jsonResponse(request, env, {
+      ok: true,
+      jobs,
+      count: jobs.length
+    });
+  } catch (error) {
+    return adminReadFailed(request, env, "admin_jobs", error);
+  }
+}
+
+async function rebuildSnapshot(request, env) {
+  const guard = await adminGuard(request, env);
+  if (!guard.ok) return guard.response;
+
+  try {
+    const result = await rebuildSnapshotFromCurrentTables(env, utcNowIso());
+    return jsonResponse(request, env, {
+      ok: true,
+      jobId: result.jobId,
+      snapshotId: result.snapshotId,
+      generatedAt: result.generatedAt,
+      counts: result.counts,
+      status: result.status,
+      message: "D1 snapshot rebuilt from current tables."
+    });
+  } catch (error) {
+    return adminReadFailed(request, env, "rebuild_snapshot", error);
   }
 }
 
@@ -194,6 +314,18 @@ export async function handleRequest(request, env = {}) {
 
   if (routeKey === "POST /api/admin/collect") {
     return await collect(request, env);
+  }
+
+  if (routeKey === "GET /api/admin/status") {
+    return await adminStatus(request, env);
+  }
+
+  if (routeKey === "GET /api/admin/jobs") {
+    return await adminJobs(request, env, url);
+  }
+
+  if (routeKey === "POST /api/admin/rebuild-snapshot") {
+    return await rebuildSnapshot(request, env);
   }
 
   if (url.pathname.startsWith("/api/admin/")) {

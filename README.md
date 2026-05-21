@@ -17,7 +17,7 @@ The current version includes a static frontend, a FastAPI backend with a SQLite 
 - RSS/Atom collector for official AI blog feeds
 - Rule-based issue clustering and signal-based scoring
 - Mock API server for integration testing
-- Cloudflare Worker F3 path with D1 latest-snapshot reads and protected official RSS/Atom collect
+- Cloudflare Worker F4 path with D1 latest-snapshot reads, protected official RSS/Atom collect, admin status/jobs, and manual snapshot rebuild
 
 ## Run The Static App
 
@@ -197,7 +197,7 @@ Set `RUN_COLLECT=1` if you want the script to trigger a real collect run as part
 
 ### Cloudflare free migration path
 
-The repo also includes an F3 Cloudflare Worker path for the zero-fixed-cost architecture:
+The repo also includes an F4 Cloudflare Worker path for the zero-fixed-cost architecture:
 
 - `worker/`: Worker API surface
 - `worker/wrangler.jsonc`: Cloudflare Worker config
@@ -205,6 +205,7 @@ The repo also includes an F3 Cloudflare Worker path for the zero-fixed-cost arch
 - `worker/scripts/seed-local.mjs`: local D1 seed helper
 - `worker/scripts/smoke-local.mjs`: dependency-free local contract check
 - `worker/scripts/collect-smoke.mjs`: dependency-free collector and D1 write check
+- `worker/scripts/admin-smoke.mjs`: dependency-free admin status/jobs/rebuild check
 - `worker/scripts/collect-live.mjs`: live official feed fetch check without D1 writes
 
 Run the Worker contract check:
@@ -242,6 +243,19 @@ Then in another terminal:
 
 ```bash
 curl -X POST http://127.0.0.1:8788/api/admin/collect \
+  -H "X-Admin-Token: local-dev-token"
+```
+
+Admin operations:
+
+```bash
+curl http://127.0.0.1:8788/api/admin/status \
+  -H "X-Admin-Token: local-dev-token"
+
+curl "http://127.0.0.1:8788/api/admin/jobs?limit=10" \
+  -H "X-Admin-Token: local-dev-token"
+
+curl -X POST http://127.0.0.1:8788/api/admin/rebuild-snapshot \
   -H "X-Admin-Token: local-dev-token"
 ```
 

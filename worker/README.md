@@ -2,20 +2,21 @@
 
 This is the Cloudflare Worker migration surface for the zero-fixed-cost Lokana architecture.
 
-F1 locked the Worker API shape. F2 added the local D1 schema and latest-snapshot read path. F3 adds protected official RSS/Atom collection into D1:
+F1 locked the Worker API shape. F2 added the local D1 schema and latest-snapshot read path. F3 added protected official RSS/Atom collection into D1. F4 adds admin status, job history, and manual snapshot rebuild:
 
 - `GET /health`
 - `GET /api/bootstrap`
 - `POST /api/admin/collect`
+- `GET /api/admin/status`
+- `GET /api/admin/jobs`
+- `POST /api/admin/rebuild-snapshot`
 - CORS for local frontend testing and `https://lokana.kr`
-- clear `501` responses for admin status/jobs/rebuild routes that land in later free-architecture rounds
 - D1 migration for the current Lokana read model
 - local D1 seed helper that writes one bootstrap snapshot
 - D1-first `/api/bootstrap`, with sample fallback when D1 is not configured or empty
 - OpenAI, Hugging Face, and Google AI official RSS/Atom feed collection
 - D1 batch write for sources, signals, issues, watchlists, snapshots, and jobs
-
-Admin status/jobs/rebuild operations are intentionally left for F4.
+- admin table counts, latest snapshot metadata, recent jobs, and collect/rebuild summaries
 
 ## Check Locally Without Cloudflare Login
 
@@ -67,6 +68,23 @@ Trigger a local collect run:
 
 ```bash
 curl -X POST http://127.0.0.1:8788/api/admin/collect \
+  -H "X-Admin-Token: local-dev-token"
+```
+
+Check admin status and recent jobs:
+
+```bash
+curl http://127.0.0.1:8788/api/admin/status \
+  -H "X-Admin-Token: local-dev-token"
+
+curl "http://127.0.0.1:8788/api/admin/jobs?limit=10" \
+  -H "X-Admin-Token: local-dev-token"
+```
+
+Rebuild the latest snapshot from the current D1 tables:
+
+```bash
+curl -X POST http://127.0.0.1:8788/api/admin/rebuild-snapshot \
   -H "X-Admin-Token: local-dev-token"
 ```
 

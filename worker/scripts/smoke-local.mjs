@@ -79,7 +79,24 @@ const preflight = await worker.fetch(
 );
 assert(preflight.status === 204, "preflight should return 204");
 
-const admin = await request("/api/admin/status");
-assert(admin.response.status === 501, "admin routes should clearly report later phase");
+const collectWithoutToken = await request("/api/admin/collect", { method: "POST" });
+assert(collectWithoutToken.response.status === 503, "collect without configured admin token should be unavailable");
+assert(collectWithoutToken.body.error === "admin_token_not_configured", "collect should explain missing admin token");
 
-console.log("Lokana Worker F2 smoke passed.");
+const collectWithoutD1 = await request(
+  "/api/admin/collect",
+  {
+    method: "POST",
+    headers: {
+      "X-Admin-Token": "local-token"
+    }
+  },
+  { ...env, ADMIN_TOKEN: "local-token" }
+);
+assert(collectWithoutD1.response.status === 503, "collect with token but without D1 should be unavailable");
+assert(collectWithoutD1.body.error === "d1_not_configured", "collect should explain missing D1 binding");
+
+const adminStatus = await request("/api/admin/status");
+assert(adminStatus.response.status === 501, "remaining admin routes should clearly report later phase");
+
+console.log("Lokana Worker F3 smoke passed.");

@@ -12,6 +12,8 @@ dist/
 build/
 .env
 .env.*
+.dev.vars
+worker/.dev.vars
 .venv/
 __pycache__/
 *.pyc

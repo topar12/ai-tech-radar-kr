@@ -32,6 +32,10 @@ const labels = {
   }
 };
 
+export function buildBootstrapLabels() {
+  return structuredClone(labels);
+}
+
 const sampleBootstrap = {
   ...labels,
   sources: [

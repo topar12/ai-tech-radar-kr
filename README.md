@@ -17,7 +17,7 @@ The current version includes a static frontend, a FastAPI backend with a SQLite 
 - RSS/Atom collector for official AI blog feeds
 - Rule-based issue clustering and signal-based scoring
 - Mock API server for integration testing
-- Cloudflare Worker F2 skeleton with a D1 latest-snapshot read path for the fully free hosting migration path
+- Cloudflare Worker F3 path with D1 latest-snapshot reads and protected official RSS/Atom collect
 
 ## Run The Static App
 
@@ -197,13 +197,15 @@ Set `RUN_COLLECT=1` if you want the script to trigger a real collect run as part
 
 ### Cloudflare free migration path
 
-The repo also includes an F2 Cloudflare Worker skeleton for the zero-fixed-cost architecture:
+The repo also includes an F3 Cloudflare Worker path for the zero-fixed-cost architecture:
 
 - `worker/`: Worker API surface
 - `worker/wrangler.jsonc`: Cloudflare Worker config
 - `worker/migrations/0001_initial.sql`: D1 schema for the current read model
 - `worker/scripts/seed-local.mjs`: local D1 seed helper
 - `worker/scripts/smoke-local.mjs`: dependency-free local contract check
+- `worker/scripts/collect-smoke.mjs`: dependency-free collector and D1 write check
+- `worker/scripts/collect-live.mjs`: live official feed fetch check without D1 writes
 
 Run the Worker contract check:
 
@@ -218,6 +220,36 @@ Apply and seed local D1:
 cd lokana/worker
 npm run d1:migrate:local
 npm run d1:seed:local
+```
+
+Run a live feed parse check without writing D1:
+
+```bash
+cd lokana/worker
+npm run collect:live
+```
+
+Run the Worker with local D1 and trigger protected collect:
+
+```bash
+cd lokana/worker
+npm run d1:migrate:local
+printf 'ADMIN_TOKEN=local-dev-token\n' > .dev.vars
+npm run dev -- --ip 127.0.0.1
+```
+
+Then in another terminal:
+
+```bash
+curl -X POST http://127.0.0.1:8788/api/admin/collect \
+  -H "X-Admin-Token: local-dev-token"
+```
+
+For production, set `ADMIN_TOKEN` as a Worker secret:
+
+```bash
+cd lokana/worker
+npx wrangler@latest secret put ADMIN_TOKEN --config wrangler.jsonc
 ```
 
 Start Wrangler locally:

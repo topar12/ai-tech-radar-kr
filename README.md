@@ -14,7 +14,6 @@ The current version is a dependency-free static web app with a mock API contract
 - Watchlist and question-style exploration panels
 - API fallback behavior: sample data when no API is configured
 - Mock API server for integration testing
-- HTML product blueprint and API integration guide
 
 ## Run The Static App
 
@@ -73,7 +72,7 @@ The response should include:
 - `watchlists`
 - `generatedAt`
 
-See [ai-tech-radar-api-integration-guide.html](./ai-tech-radar-api-integration-guide.html) for the full contract and setup guidance.
+The mock server in `api/mock-radar-server.js` returns the expected response shape for local integration testing.
 
 ## Project Files
 
@@ -82,8 +81,6 @@ See [ai-tech-radar-api-integration-guide.html](./ai-tech-radar-api-integration-g
 - `app.js`: rendering, state, API bootstrap, and interactions
 - `DESIGN.md`: Airbnb-inspired design system reference generated with `getdesign`
 - `api/mock-radar-server.js`: dependency-free mock API
-- `ai-tech-radar-kr-blueprint.html`: product blueprint
-- `ai-tech-radar-api-integration-guide.html`: API connection guide
 
 ## Verification
 

@@ -1,12 +1,15 @@
 import os
 from dataclasses import dataclass
 from functools import lru_cache
+from pathlib import Path
 
 
 DEFAULT_CORS_ORIGINS = (
     "http://127.0.0.1:8765",
     "http://localhost:8765",
 )
+BACKEND_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_DATABASE_URL = f"sqlite:///{BACKEND_ROOT / 'data' / 'localai-radar.sqlite3'}"
 
 
 def parse_csv(value: str | None, fallback: tuple[str, ...]) -> list[str]:
@@ -34,7 +37,7 @@ def get_settings() -> Settings:
         debug=os.getenv("DEBUG", os.getenv("LOCALAI_DEBUG", "")).lower() in {"1", "true", "yes", "on"},
         cors_origins=parse_csv(os.getenv("CORS_ORIGINS", os.getenv("LOCALAI_CORS_ORIGINS")), DEFAULT_CORS_ORIGINS),
         admin_token=os.getenv("ADMIN_TOKEN", ""),
-        database_url=os.getenv("DATABASE_URL", ""),
+        database_url=os.getenv("DATABASE_URL", DEFAULT_DATABASE_URL),
         github_token=os.getenv("GITHUB_TOKEN", ""),
         hf_token=os.getenv("HF_TOKEN", ""),
     )

@@ -2,7 +2,7 @@
 
 AI Tech Radar KR is a Korean-first prototype for tracking fast-moving AI technology signals as decision-ready issues instead of a raw news feed.
 
-The current version includes a static frontend, a FastAPI backend skeleton, and a mock API. The UI can run on sample data first, then switch to a real backend through `GET /api/bootstrap`.
+The current version includes a static frontend, a FastAPI backend with a SQLite snapshot store, and a mock API. The UI can run on sample data first, then switch to a real backend through `GET /api/bootstrap`.
 
 ## What It Includes
 
@@ -13,7 +13,7 @@ The current version includes a static frontend, a FastAPI backend skeleton, and 
 - Detail panel with summary, evidence, timeline, and action tabs
 - Watchlist and question-style exploration panels
 - API fallback behavior: sample data when no API is configured
-- FastAPI backend skeleton for the Round 2 contract
+- FastAPI backend with a SQLite-backed snapshot read model
 - Mock API server for integration testing
 
 ## Run The Static App
@@ -70,6 +70,8 @@ cd ai-tech-radar-kr
 ADMIN_TOKEN=localai-dev-admin-token backend/.venv/bin/python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8787
 ```
 
+The first backend request creates a local SQLite database at `backend/data/localai-radar.sqlite3`. To override it in Round 3, use a `sqlite:///...` style `DATABASE_URL`.
+
 Connect the frontend:
 
 ```text
@@ -111,14 +113,16 @@ The response should include:
 
 The mock server in `api/mock-radar-server.js` returns the expected response shape for local integration testing.
 
-The FastAPI skeleton serves the same contract and keeps the admin rebuild endpoint behind `X-Admin-Token`.
+The FastAPI backend serves the same contract and keeps the admin rebuild endpoint behind `X-Admin-Token`.
+
+Round 3 stores the latest bootstrap payload as a persisted snapshot and reads that snapshot back on later requests.
 
 ## Project Files
 
 - `index.html`: app shell
 - `styles.css`: responsive product UI
 - `app.js`: rendering, state, API bootstrap, and interactions
-- `backend/`: FastAPI app skeleton for `/health`, `/api/bootstrap`, and `/api/admin/rebuild-snapshot`
+- `backend/`: FastAPI app, SQLite snapshot store, and admin rebuild flow
 - `DESIGN.md`: Airbnb-inspired design system reference generated with `getdesign`
 - `api/mock-radar-server.js`: dependency-free mock API
 
@@ -139,4 +143,12 @@ curl http://127.0.0.1:8787/api/bootstrap
 curl -X POST http://127.0.0.1:8787/api/admin/rebuild-snapshot -H "X-Admin-Token: localai-dev-admin-token"
 ```
 
-Browser checks confirmed sample fallback, FastAPI bootstrap replacement, and zero console errors in the successful frontend integration path.
+Round 3 also verified:
+
+```bash
+backend/.venv/bin/python -m compileall backend/app
+curl http://127.0.0.1:8787/api/bootstrap
+curl -X POST http://127.0.0.1:8787/api/admin/rebuild-snapshot -H "X-Admin-Token: localai-dev-admin-token"
+```
+
+Browser checks confirmed sample fallback, persisted FastAPI bootstrap replacement, and zero console errors in the successful frontend integration path.

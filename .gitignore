@@ -13,3 +13,6 @@ build/
 .venv/
 __pycache__/
 *.pyc
+backend/data/
+*.sqlite3
+*.db

@@ -1,134 +1,410 @@
-from copy import deepcopy
+import json
+from typing import Any
+from uuid import uuid4
+
+from app.data.db import db_session
+from app.data.seed import LABELS, SEED_ISSUES, SEED_SIGNALS, SEED_SOURCES, SEED_WATCHLISTS
 
 
-LABELS: dict[str, dict[str, str]] = {
-    "categories": {
-        "models": "Models",
-        "agents": "Agents",
-        "infra": "Infra",
-        "open_source": "Open Source",
-        "research": "Research",
-        "business": "Business",
-        "policy": "Policy",
-    },
-    "audienceLabels": {
-        "developer": "개발자",
-        "pm": "PM",
-        "leader": "리더",
-        "learner": "학습자",
-        "researcher": "리서처",
-        "founder": "창업자",
-        "creator": "콘텐츠",
-        "decision_maker": "의사결정",
-    },
-    "certaintyLabels": {
-        "confirmed": "확정 발표",
-        "early_report": "초기 신호",
-        "inferred": "추정",
-        "debated": "논쟁 중",
-    },
-    "directionLabels": {
-        "rising": "급등",
-        "stable": "유지",
-        "cooling": "하락",
-        "watch": "관찰",
-    },
-}
+def dumps_json(value: Any) -> str:
+    return json.dumps(value, ensure_ascii=False)
 
-STATIC_BOOTSTRAP: dict[str, object] = {
-    **LABELS,
-    "sources": [
+
+def loads_json(value: str) -> Any:
+    return json.loads(value)
+
+
+def seed_reference_data(connection) -> None:
+    connection.execute("DELETE FROM signals")
+    connection.execute("DELETE FROM watchlists")
+    connection.execute("DELETE FROM issues")
+    connection.execute("DELETE FROM sources")
+    connection.executemany(
+        """
+        INSERT OR REPLACE INTO sources (
+            id,
+            type,
+            publisher,
+            title,
+            url,
+            reliability,
+            published_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        [
+            (
+                source["id"],
+                source["type"],
+                source["publisher"],
+                source["title"],
+                source["url"],
+                source["reliability"],
+                source["publishedAt"],
+            )
+            for source in SEED_SOURCES
+        ],
+    )
+    connection.executemany(
+        """
+        INSERT OR REPLACE INTO issues (
+            id,
+            title,
+            conclusion,
+            categories_json,
+            tags_json,
+            certainty,
+            importance,
+            velocity,
+            practical_value,
+            korea_relevance,
+            risk,
+            direction,
+            audiences_json,
+            source_ids_json,
+            signal_ids_json,
+            updated_at,
+            summary_json,
+            timeline_json,
+            validation_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        [
+            (
+                issue["id"],
+                issue["title"],
+                issue["conclusion"],
+                dumps_json(issue["categories"]),
+                dumps_json(issue["tags"]),
+                issue["certainty"],
+                issue["importance"],
+                issue["velocity"],
+                issue["practicalValue"],
+                issue["koreaRelevance"],
+                issue["risk"],
+                issue["direction"],
+                dumps_json(issue["audiences"]),
+                dumps_json(issue["sourceIds"]),
+                dumps_json(issue["signalIds"]),
+                issue["updatedAt"],
+                dumps_json(issue["summary"]),
+                dumps_json(issue["timeline"]),
+                dumps_json(issue["validation"]),
+            )
+            for issue in SEED_ISSUES
+        ],
+    )
+    connection.executemany(
+        """
+        INSERT OR REPLACE INTO signals (
+            id,
+            issue_id,
+            source_id,
+            type,
+            title,
+            strength,
+            velocity,
+            evidence_text
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        [
+            (
+                signal["id"],
+                signal["issueId"],
+                signal["sourceId"],
+                signal["type"],
+                signal["title"],
+                signal["strength"],
+                signal["velocity"],
+                signal["evidenceText"],
+            )
+            for signal in SEED_SIGNALS
+        ],
+    )
+    connection.executemany(
+        """
+        INSERT OR REPLACE INTO watchlists (
+            id,
+            label,
+            kind,
+            query_text,
+            issue_ids_json,
+            change_text
+        ) VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        [
+            (
+                watchlist["id"],
+                watchlist["label"],
+                watchlist["kind"],
+                watchlist["query"],
+                dumps_json(watchlist["issueIds"]),
+                watchlist["change"],
+            )
+            for watchlist in SEED_WATCHLISTS
+        ],
+    )
+    connection.commit()
+
+
+def count_table_rows(connection) -> dict[str, int]:
+    return {
+        "sourceCount": connection.execute("SELECT COUNT(*) FROM sources").fetchone()[0],
+        "signalCount": connection.execute("SELECT COUNT(*) FROM signals").fetchone()[0],
+        "issueCount": connection.execute("SELECT COUNT(*) FROM issues").fetchone()[0],
+        "watchlistCount": connection.execute("SELECT COUNT(*) FROM watchlists").fetchone()[0],
+    }
+
+
+def fetch_sources(connection) -> list[dict[str, object]]:
+    rows = connection.execute(
+        """
+        SELECT id, type, publisher, title, url, reliability, published_at
+        FROM sources
+        ORDER BY published_at DESC, id
+        """
+    ).fetchall()
+    return [
         {
-            "id": "api-src-official",
-            "type": "official",
-            "publisher": "공식 문서",
-            "title": "Agent runtime production guidance",
-            "url": "https://platform.openai.com/docs",
-            "reliability": 5,
-            "publishedAt": "2026-05-21T00:20:00Z",
-        },
-        {
-            "id": "api-src-github",
-            "type": "github",
-            "publisher": "GitHub",
-            "title": "AI agent repositories show sustained activity",
-            "url": "https://github.com/topics/ai-agent",
-            "reliability": 4,
-            "publishedAt": "2026-05-21T01:10:00Z",
-        },
-    ],
-    "signals": [
-        {
-            "id": "api-sig-agent-ops",
-            "issueId": "api-issue-agent-ops",
-            "sourceId": "api-src-official",
-            "type": "release",
-            "title": "운영 기능과 권한 경계가 강조됨",
-            "strength": 86,
-            "velocity": 71,
-            "evidenceText": "공식 문서와 개발자 커뮤니티에서 운영 안정성 언급이 반복됨",
-        },
-        {
-            "id": "api-sig-github",
-            "issueId": "api-issue-agent-ops",
-            "sourceId": "api-src-github",
-            "type": "repo_growth",
-            "title": "에이전트 관련 저장소 활동 유지",
-            "strength": 74,
-            "velocity": 79,
-            "evidenceText": "오픈소스 활동이 데모보다 운영 도구 중심으로 이어짐",
-        },
-    ],
-    "issues": [
-        {
-            "id": "api-issue-agent-ops",
-            "title": "API에서 내려온 에이전트 운영 계층 이슈",
-            "conclusion": "실제 API 연결이 되면 이 카드처럼 샘플 데이터가 즉시 교체된다.",
-            "categories": ["agents", "infra", "open_source"],
-            "tags": ["agent", "runtime", "api-connected"],
-            "certainty": "early_report",
-            "importance": 91,
-            "velocity": 79,
-            "practicalValue": 84,
-            "koreaRelevance": 68,
-            "risk": 43,
-            "direction": "rising",
-            "audiences": ["developer", "pm", "leader"],
-            "sourceIds": ["api-src-official", "api-src-github"],
-            "signalIds": ["api-sig-agent-ops", "api-sig-github"],
-            "updatedAt": "2026-05-21T02:30:00Z",
-            "summary": {
-                "whatHappened": "프론트엔드가 /api/bootstrap 응답을 받아 기존 mock 배열을 교체했다.",
-                "whyMatters": "이제 수집기, DB, LLM 요약기를 붙여도 UI 코드를 크게 바꾸지 않아도 된다.",
-                "whoAffected": "개발자, PM, AI 리서치 운영자",
-                "nextAction": "수집 백엔드가 이 스키마로 데이터를 내보내도록 맞춘다.",
-            },
-            "timeline": [
-                "정적 mock UI 구현",
-                "API bootstrap 계약 추가",
-                "실데이터 수집기와 점수화 파이프라인 연결 예정",
-            ],
-            "validation": [
-                "GET /api/bootstrap 응답 스키마 확인",
-                "CORS 헤더 확인",
-                "카드, 상세, 검색, Watchlist 렌더링 확인",
-            ],
+            "id": row["id"],
+            "type": row["type"],
+            "publisher": row["publisher"],
+            "title": row["title"],
+            "url": row["url"],
+            "reliability": row["reliability"],
+            "publishedAt": row["published_at"],
         }
-    ],
-    "watchlists": [
+        for row in rows
+    ]
+
+
+def fetch_signals(connection) -> list[dict[str, object]]:
+    rows = connection.execute(
+        """
+        SELECT id, issue_id, source_id, type, title, strength, velocity, evidence_text
+        FROM signals
+        ORDER BY strength DESC, velocity DESC, id
+        """
+    ).fetchall()
+    return [
         {
-            "id": "api-wl-agents",
-            "label": "API 연결 확인",
-            "kind": "keyword",
-            "query": "api-connected",
-            "issueIds": ["api-issue-agent-ops"],
-            "change": "실시간 응답 사용 중",
+            "id": row["id"],
+            "issueId": row["issue_id"],
+            "sourceId": row["source_id"],
+            "type": row["type"],
+            "title": row["title"],
+            "strength": row["strength"],
+            "velocity": row["velocity"],
+            "evidenceText": row["evidence_text"],
         }
-    ],
-}
+        for row in rows
+    ]
+
+
+def fetch_issues(connection) -> list[dict[str, object]]:
+    rows = connection.execute(
+        """
+        SELECT
+            id,
+            title,
+            conclusion,
+            categories_json,
+            tags_json,
+            certainty,
+            importance,
+            velocity,
+            practical_value,
+            korea_relevance,
+            risk,
+            direction,
+            audiences_json,
+            source_ids_json,
+            signal_ids_json,
+            updated_at,
+            summary_json,
+            timeline_json,
+            validation_json
+        FROM issues
+        ORDER BY importance DESC, velocity DESC, updated_at DESC, id
+        """
+    ).fetchall()
+    return [
+        {
+            "id": row["id"],
+            "title": row["title"],
+            "conclusion": row["conclusion"],
+            "categories": loads_json(row["categories_json"]),
+            "tags": loads_json(row["tags_json"]),
+            "certainty": row["certainty"],
+            "importance": row["importance"],
+            "velocity": row["velocity"],
+            "practicalValue": row["practical_value"],
+            "koreaRelevance": row["korea_relevance"],
+            "risk": row["risk"],
+            "direction": row["direction"],
+            "audiences": loads_json(row["audiences_json"]),
+            "sourceIds": loads_json(row["source_ids_json"]),
+            "signalIds": loads_json(row["signal_ids_json"]),
+            "updatedAt": row["updated_at"],
+            "summary": loads_json(row["summary_json"]),
+            "timeline": loads_json(row["timeline_json"]),
+            "validation": loads_json(row["validation_json"]),
+        }
+        for row in rows
+    ]
+
+
+def fetch_watchlists(connection) -> list[dict[str, object]]:
+    rows = connection.execute(
+        """
+        SELECT id, label, kind, query_text, issue_ids_json, change_text
+        FROM watchlists
+        ORDER BY id
+        """
+    ).fetchall()
+    return [
+        {
+            "id": row["id"],
+            "label": row["label"],
+            "kind": row["kind"],
+            "query": row["query_text"],
+            "issueIds": loads_json(row["issue_ids_json"]),
+            "change": row["change_text"],
+        }
+        for row in rows
+    ]
+
+
+def build_snapshot_payload(connection, generated_at: str) -> dict[str, object]:
+    return {
+        **LABELS,
+        "sources": fetch_sources(connection),
+        "signals": fetch_signals(connection),
+        "issues": fetch_issues(connection),
+        "watchlists": fetch_watchlists(connection),
+        "generatedAt": generated_at,
+    }
+
+
+def insert_snapshot(connection, generated_at: str, payload: dict[str, object]) -> tuple[str, dict[str, int]]:
+    snapshot_id = f"snapshot-{uuid4()}"
+    counts = count_table_rows(connection)
+    connection.execute(
+        """
+        INSERT INTO snapshots (
+            id,
+            generated_at,
+            payload_json,
+            source_count,
+            signal_count,
+            issue_count,
+            watchlist_count,
+            created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            snapshot_id,
+            generated_at,
+            dumps_json(payload),
+            counts["sourceCount"],
+            counts["signalCount"],
+            counts["issueCount"],
+            counts["watchlistCount"],
+            generated_at,
+        ),
+    )
+    return snapshot_id, counts
+
+
+def mark_job_completed(connection, job_id: str, finished_at: str, snapshot_id: str, details: dict[str, object]) -> None:
+    connection.execute(
+        """
+        UPDATE jobs
+        SET status = ?, finished_at = ?, snapshot_id = ?, details_json = ?
+        WHERE id = ?
+        """,
+        ("completed", finished_at, snapshot_id, dumps_json(details), job_id),
+    )
+
+
+def mark_job_failed(connection, job_id: str, finished_at: str, details: dict[str, object]) -> None:
+    connection.execute(
+        """
+        UPDATE jobs
+        SET status = ?, finished_at = ?, details_json = ?
+        WHERE id = ?
+        """,
+        ("failed", finished_at, dumps_json(details), job_id),
+    )
+
+
+def create_job(connection, generated_at: str) -> str:
+    job_id = f"job-{uuid4()}"
+    connection.execute(
+        """
+        INSERT INTO jobs (id, kind, status, started_at, finished_at, snapshot_id, details_json)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (job_id, "rebuild_snapshot", "running", generated_at, None, None, dumps_json({})),
+    )
+    return job_id
+
+
+def latest_snapshot_payload(connection) -> dict[str, object] | None:
+    row = connection.execute(
+        """
+        SELECT payload_json
+        FROM snapshots
+        ORDER BY generated_at DESC, created_at DESC, id DESC
+        LIMIT 1
+        """
+    ).fetchone()
+    if row is None:
+        return None
+    return loads_json(row["payload_json"])
+
+
+def rebuild_bootstrap_snapshot(generated_at: str) -> dict[str, object]:
+    with db_session() as connection:
+        job_id = create_job(connection, generated_at)
+        try:
+            seed_reference_data(connection)
+            payload = build_snapshot_payload(connection, generated_at)
+            snapshot_id, counts = insert_snapshot(connection, generated_at, payload)
+            mark_job_completed(
+                connection,
+                job_id,
+                generated_at,
+                snapshot_id,
+                {
+                    "generatedAt": generated_at,
+                    "counts": counts,
+                },
+            )
+            connection.commit()
+            return {
+                "jobId": job_id,
+                "snapshotId": snapshot_id,
+                "generatedAt": generated_at,
+                "counts": counts,
+                "payload": payload,
+            }
+        except Exception as exc:
+            mark_job_failed(
+                connection,
+                job_id,
+                generated_at,
+                {
+                    "generatedAt": generated_at,
+                    "error": str(exc),
+                },
+            )
+            connection.commit()
+            raise
 
 
 def build_bootstrap_payload(generated_at: str) -> dict[str, object]:
-    payload = deepcopy(STATIC_BOOTSTRAP)
-    payload["generatedAt"] = generated_at
-    return payload
+    with db_session() as connection:
+        payload = latest_snapshot_payload(connection)
+        if payload is not None:
+            return payload
+    return rebuild_bootstrap_snapshot(generated_at)["payload"]

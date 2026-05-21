@@ -1,1 +1,1 @@
-"""Round 2 backend package."""
+"""AI Tech Radar backend package."""

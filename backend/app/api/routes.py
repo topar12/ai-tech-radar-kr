@@ -1,10 +1,9 @@
 from datetime import datetime, timezone
 from typing import Annotated
-from uuid import uuid4
 
 from fastapi import APIRouter, Header, HTTPException, status
 
-from app.data.bootstrap import build_bootstrap_payload
+from app.data.bootstrap import build_bootstrap_payload, rebuild_bootstrap_snapshot
 from app.settings import get_settings
 
 router = APIRouter()
@@ -48,11 +47,13 @@ def bootstrap() -> dict[str, object]:
 @router.post("/api/admin/rebuild-snapshot")
 def rebuild_snapshot(x_admin_token: Annotated[str | None, Header()] = None) -> dict[str, object]:
     require_admin_token(x_admin_token)
-    generated_at = utc_now_iso()
+    result = rebuild_bootstrap_snapshot(generated_at=utc_now_iso())
     return {
         "ok": True,
         "status": "completed",
-        "snapshotId": f"snapshot-{uuid4()}",
-        "generatedAt": generated_at,
-        "message": "Snapshot rebuild skeleton completed using in-memory bootstrap data.",
+        "jobId": result["jobId"],
+        "snapshotId": result["snapshotId"],
+        "generatedAt": result["generatedAt"],
+        "counts": result["counts"],
+        "message": "Snapshot rebuilt from SQLite seed data.",
     }

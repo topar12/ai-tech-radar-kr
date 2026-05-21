@@ -1,1 +1,1 @@
-"""Static data sources for the Round 2 skeleton."""
+"""SQLite-backed bootstrap data helpers."""

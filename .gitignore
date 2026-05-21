@@ -6,6 +6,8 @@
 *.png
 *-snapshot.md
 node_modules/
+.wrangler/
+worker/.wrangler/
 dist/
 build/
 .env

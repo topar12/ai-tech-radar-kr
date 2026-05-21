@@ -17,6 +17,7 @@ The current version includes a static frontend, a FastAPI backend with a SQLite 
 - RSS/Atom collector for official AI blog feeds
 - Rule-based issue clustering and signal-based scoring
 - Mock API server for integration testing
+- Cloudflare Worker F1 skeleton for the fully free hosting migration path
 
 ## Run The Static App
 
@@ -194,6 +195,36 @@ bash scripts/smoke-production.sh
 
 Set `RUN_COLLECT=1` if you want the script to trigger a real collect run as part of the check.
 
+### Cloudflare free migration path
+
+The repo also includes an F1 Cloudflare Worker skeleton for the zero-fixed-cost architecture:
+
+- `worker/`: Worker API surface
+- `worker/wrangler.jsonc`: Cloudflare Worker config
+- `worker/scripts/smoke-local.mjs`: dependency-free local contract check
+
+Run the F1 check:
+
+```bash
+cd lokana/worker
+npm run check
+```
+
+Start Wrangler locally:
+
+```bash
+cd lokana/worker
+npm run dev
+```
+
+Connect the frontend:
+
+```text
+http://127.0.0.1:8765/index.html?api=http://127.0.0.1:8788
+```
+
+F1 only serves `GET /health` and `GET /api/bootstrap` from sample data. D1 persistence, migrations, official feed collection, and admin operations land in later Cloudflare migration rounds.
+
 ## API Contract
 
 The app expects one bootstrap endpoint:
@@ -238,6 +269,7 @@ Round 7 adds deployment-ready artifacts for Render and a runtime-config hook for
 - `styles.css`: responsive product UI
 - `app.js`: rendering, state, API bootstrap, and interactions
 - `backend/`: FastAPI app, SQLite snapshot store, RSS/Atom collector, and admin flows
+- `worker/`: Cloudflare Worker skeleton for the fully free hosting migration path
 - `DESIGN.md`: Airbnb-inspired design system reference generated with `getdesign`
 - `api/mock-radar-server.js`: dependency-free mock API
 
@@ -248,6 +280,7 @@ The current version was checked with:
 ```bash
 node --check app.js
 node --check api/mock-radar-server.js
+cd worker && npm run check
 ```
 
 Round 2 also verified:

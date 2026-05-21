@@ -1,0 +1,10 @@
+{
+  "name": "lokana-worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "node --check src/bootstrap-data.js && node --check src/cors.js && node --check src/routes.js && node --check src/index.js && node scripts/smoke-local.mjs",
+    "dev": "npx wrangler@latest dev --config wrangler.jsonc --port 8788",
+    "deploy": "npx wrangler@latest deploy --config wrangler.jsonc"
+  }
+}

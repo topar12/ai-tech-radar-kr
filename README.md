@@ -178,6 +178,21 @@ cd ai-tech-radar-kr
 PYTHONPATH=backend backend/.venv/bin/python backend/scripts/backup_sqlite.py
 ```
 
+### Production smoke test
+
+Run a quick end-to-end check after the frontend and backend are live:
+
+```bash
+cd ai-tech-radar-kr
+API_BASE_URL=https://your-api-domain \
+FRONTEND_URL=https://your-frontend-domain \
+ADMIN_TOKEN=your-admin-token \
+RUN_COLLECT=0 \
+bash scripts/smoke-production.sh
+```
+
+Set `RUN_COLLECT=1` if you want the script to trigger a real collect run as part of the check.
+
 ## API Contract
 
 The app expects one bootstrap endpoint:

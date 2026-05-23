@@ -62,15 +62,18 @@ function sourceContext(issue, sourceMap) {
 }
 
 function issuePayload(issue, sourceMap) {
+  const sources = sourceContext(issue, sourceMap);
   return {
     issueId: issue.id,
     title: issue.title,
     conclusion: issue.conclusion,
     categories: issue.categories,
     audiences: issue.audiences,
+    sourceCount: issue.sourceIds.length,
+    publishers: [...new Set(sources.map((source) => source.publisher))],
     updatedAt: issue.updatedAt,
     currentSummary: issue.summary,
-    sources: sourceContext(issue, sourceMap)
+    sources
   };
 }
 
@@ -78,17 +81,20 @@ function systemPrompt(language) {
   const korean = language.toLowerCase().startsWith("ko");
   if (korean) {
     return [
-      "You rewrite AI tech radar issues into concise factual Korean JSON.",
+      "You rewrite AI tech radar issues into concise factual Korean JSON for operators and product builders.",
       "Return JSON only.",
       "Do not use markdown, code fences, or commentary.",
       "Do not invent facts that are not present in the input.",
-      "Keep the tone analytical, calm, and operator-friendly.",
+      "Keep the tone analytical, calm, specific, and operator-friendly.",
+      "Use exact company, product, event, or feature names when they appear in the source titles.",
+      "Prefer concrete facts over generic trust or trend wording.",
+      "Avoid vague phrases such as '공식 채널 업데이트라서 신뢰도는 높고', '흐름 판단에 바로 쓸 수 있다', '같은 흐름이 확인됐다' unless there is no more specific wording available.",
       "For each issue, produce:",
-      "- conclusion: one sentence",
-      "- summary.whatHappened: one or two short sentences",
-      "- summary.whyMatters: one short sentence",
-      "- summary.whoAffected: one short sentence in Korean",
-      "- summary.nextAction: one short sentence",
+      "- conclusion: one sentence that says what changed and names the subject directly",
+      "- summary.whatHappened: one or two short sentences describing the concrete announcement, release, ranking, launch, or update",
+      "- summary.whyMatters: one short sentence about practical impact on adoption, product decisions, workflows, competition, or operations",
+      "- summary.whoAffected: a short Korean noun list separated by commas, not a full sentence",
+      "- summary.nextAction: one short, concrete verification or decision step",
       "Preserve nuance and stay conservative when evidence is thin."
     ].join(" ");
   }
@@ -104,6 +110,14 @@ function systemPrompt(language) {
 function userPrompt(issues) {
   return JSON.stringify({
     task: "Rewrite the issue conclusion and summary fields. Keep the same issueId values.",
+    styleChecklist: [
+      "Korean output",
+      "specific proper nouns",
+      "no generic trust wording",
+      "whyMatters must be concrete",
+      "whoAffected must be a short noun list",
+      "nextAction must be actionable"
+    ],
     outputSchema: {
       issues: [
         {
@@ -145,10 +159,10 @@ function extractJson(text) {
 
 function normalizedSummaryFields(summary = {}) {
   return {
-    whatHappened: String(summary.whatHappened || "").trim(),
-    whyMatters: String(summary.whyMatters || "").trim(),
-    whoAffected: String(summary.whoAffected || "").trim(),
-    nextAction: String(summary.nextAction || "").trim()
+    whatHappened: String(summary.whatHappened || "").replace(/\s+/g, " ").trim(),
+    whyMatters: String(summary.whyMatters || "").replace(/\s+/g, " ").trim(),
+    whoAffected: String(summary.whoAffected || "").replace(/\s+/g, " ").replace(/[.。]+$/g, "").trim(),
+    nextAction: String(summary.nextAction || "").replace(/\s+/g, " ").trim()
   };
 }
 
@@ -186,8 +200,9 @@ async function requestMimoSummary(config, payloadIssues, fetchFn) {
         }
       ],
       max_completion_tokens: config.maxCompletionTokens,
-      temperature: 0.3,
+      temperature: 0.45,
       top_p: 0.95,
+      frequency_penalty: 0.15,
       stream: false,
       thinking: {
         type: "disabled"

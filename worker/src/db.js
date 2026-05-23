@@ -105,6 +105,7 @@ function summarizeJobDetails(jobKind, details) {
   }
 
   const collector = details.collector;
+  const summarizer = details.summarizer || collector?.summarizer || null;
   if (jobKind === "collect_official_feeds" && collector && typeof collector === "object") {
     const feeds = Array.isArray(collector.feeds) ? collector.feeds : [];
     const failedFeeds = feeds
@@ -129,6 +130,15 @@ function summarizeJobDetails(jobKind, details) {
 
   if (details.rebuiltFrom) {
     summary.rebuiltFrom = details.rebuiltFrom;
+  }
+  if (summarizer && typeof summarizer === "object") {
+    if (summarizer.provider) summary.summaryProvider = summarizer.provider;
+    if (summarizer.model) summary.summaryModel = summarizer.model;
+    if (summarizer.status) summary.summaryStatus = summarizer.status;
+    if (typeof summarizer.summarizedIssueCount === "number") {
+      summary.summarizedIssueCount = summarizer.summarizedIssueCount;
+    }
+    if (summarizer.error) summary.summaryError = summarizer.error;
   }
   if (details.error) {
     summary.error = details.error;

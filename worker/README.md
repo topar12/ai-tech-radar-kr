@@ -15,6 +15,7 @@ F1 locked the Worker API shape. F2 added the local D1 schema and latest-snapshot
 - local D1 seed helper that writes one bootstrap snapshot
 - D1-first `/api/bootstrap`, with sample fallback when D1 is not configured or empty
 - OpenAI, Hugging Face, and Google AI official RSS/Atom feed collection
+- Optional Xiaomi MiMo summary enhancement on clustered issues
 - D1 batch write for sources, signals, issues, watchlists, snapshots, and jobs
 - admin table counts, latest snapshot metadata, recent jobs, and collect/rebuild summaries
 - Cron Trigger: every 6 hours
@@ -54,6 +55,13 @@ Create a local admin secret file first. It is ignored by git:
 ```bash
 cd /Users/juho/Desktop/localAI/worker
 printf 'ADMIN_TOKEN=local-dev-token\n' > .dev.vars
+```
+
+To enable MiMo-based Korean summaries in local dev, add the API key to the same file:
+
+```bash
+cd /Users/juho/Desktop/localAI/worker
+printf 'ADMIN_TOKEN=local-dev-token\nMIMO_API_KEY=your-mimo-key\n' > .dev.vars
 ```
 
 ```bash
@@ -107,6 +115,15 @@ Set the production admin secret before exposing collect:
 
 ```bash
 npx wrangler@latest secret put ADMIN_TOKEN --config wrangler.jsonc
+npx wrangler@latest secret put MIMO_API_KEY --config wrangler.jsonc
+```
+
+Optional non-secret Worker vars for MiMo:
+
+```text
+MIMO_MODEL=mimo-v2.5
+MIMO_SUMMARY_MAX_ISSUES=12
+MIMO_SUMMARY_LANGUAGE=ko
 ```
 
 Deploy the Worker:

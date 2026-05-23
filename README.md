@@ -24,6 +24,7 @@ The active production stack is Cloudflare Pages for the static frontend, Cloudfl
 - Watchlist and question-style exploration panels
 - Cloudflare Worker API with D1 latest-snapshot reads
 - Protected official RSS/Atom collection
+- Optional Xiaomi MiMo `mimo-v2.5` summary refinement for clustered issues
 - Admin status, jobs, collect, and manual rebuild endpoints
 - Six-hour Cron collection
 - Dependency-free mock API for local frontend testing

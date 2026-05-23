@@ -29,6 +29,9 @@
   "vars": {
     "CORS_ORIGINS": "http://127.0.0.1:8765,http://localhost:8765,https://lokana.kr,https://www.lokana.kr",
     "COLLECTOR_MAX_ITEMS_PER_FEED": "4",
-    "COLLECTOR_TIMEOUT_SECONDS": "15"
+    "COLLECTOR_TIMEOUT_SECONDS": "15",
+    "MIMO_MODEL": "mimo-v2.5",
+    "MIMO_SUMMARY_MAX_ISSUES": "12",
+    "MIMO_SUMMARY_LANGUAGE": "ko"
   }
 }

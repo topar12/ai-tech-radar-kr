@@ -1,4 +1,5 @@
 import { buildBootstrapLabels } from "./bootstrap-data.js";
+import { maybeSummarizeIssuesWithMimo } from "./mimo.js";
 
 export const OFFICIAL_FEEDS = [
   {
@@ -836,10 +837,19 @@ export async function collectOfficialFeedDataset(options = {}) {
   signals.sort((left, right) => right.strength - left.strength || right.velocity - left.velocity);
   sources.sort((left, right) => right.publishedAt.localeCompare(left.publishedAt));
 
+  const mimoSummary = await maybeSummarizeIssuesWithMimo({
+    env: options.env,
+    issues,
+    sources,
+    fetchFn
+  });
+  issues.splice(0, issues.length, ...mimoSummary.issues);
+
   const watchlists = buildWatchlists(issues, publisherIssueMap);
   const dataset = { sources, signals, issues, watchlists };
   const details = {
     feeds: feedResults,
+    summarizer: mimoSummary.details,
     collectedSourceCount: sources.length,
     collectedSignalCount: signals.length,
     collectedWatchlistCount: watchlists.length,
@@ -864,5 +874,7 @@ export function collectJobStatus(details = {}) {
   const feeds = Array.isArray(details.feeds) ? details.feeds : [];
   const hasFailedFeed = feeds.some((feed) => feed.status !== "completed");
   const hasEmptyFeed = feeds.some((feed) => feed.status === "completed" && Number(feed.acceptedEntries || 0) === 0);
-  return hasFailedFeed || hasEmptyFeed ? "completed_with_warnings" : "completed";
+  const summarizerStatus = details.summarizer?.status;
+  const hasSummaryWarning = summarizerStatus === "failed" || summarizerStatus === "partial";
+  return hasFailedFeed || hasEmptyFeed || hasSummaryWarning ? "completed_with_warnings" : "completed";
 }

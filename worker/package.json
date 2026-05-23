@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "check": "node --check src/bootstrap-data.js && node --check src/collector.js && node --check src/cors.js && node --check src/db.js && node --check src/routes.js && node --check src/index.js && node --check scripts/seed-local.mjs && node --check scripts/collect-smoke.mjs && node --check scripts/admin-smoke.mjs && node --check scripts/collect-live.mjs && node --check scripts/smoke-remote.mjs && node scripts/collect-smoke.mjs && node scripts/admin-smoke.mjs && node scripts/smoke-local.mjs",
+    "check": "node --check src/bootstrap-data.js && node --check src/collector.js && node --check src/cors.js && node --check src/db.js && node --check src/mimo.js && node --check src/routes.js && node --check src/index.js && node --check scripts/seed-local.mjs && node --check scripts/collect-smoke.mjs && node --check scripts/mimo-smoke.mjs && node --check scripts/admin-smoke.mjs && node --check scripts/collect-live.mjs && node --check scripts/smoke-remote.mjs && node scripts/collect-smoke.mjs && node scripts/mimo-smoke.mjs && node scripts/admin-smoke.mjs && node scripts/smoke-local.mjs",
     "collect:live": "node scripts/collect-live.mjs",
     "d1:migrate:local": "npx wrangler@latest d1 migrations apply lokana-prod --local --config wrangler.jsonc",
     "d1:migrate:remote": "npx wrangler@latest d1 migrations apply lokana-prod --remote --config wrangler.jsonc",
